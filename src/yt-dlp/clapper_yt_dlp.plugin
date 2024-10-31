@@ -1,0 +1,7 @@
+[Plugin]
+Module=clapper_yt_dlp
+Loader=python
+Name=yt-dlp
+X-Interfaces=Extractable
+X-Schemes=https
+X-Hosts=youtube.com;youtu.be

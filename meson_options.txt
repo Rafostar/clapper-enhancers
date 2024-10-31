@@ -1,0 +1,5 @@
+option('yt-dlp',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer yt-dlp'
+)

@@ -1,5 +1,6 @@
 # Enhancers
 clapper_possible_enhancers = [
+  'yt-dlp',
 ]
 
 clapper_available_enhancers = []
