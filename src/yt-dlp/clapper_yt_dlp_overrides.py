@@ -37,14 +37,14 @@ class ClapperYoutubeIE(YoutubeIE):
             if not (format_id := fmt.get('format_id')):
                 continue
 
+            expires_in = 0
+
             for resp_data in streaming_data:
-                expires_in = int(resp_data.get('expiresInSeconds') or 0)
-                adaptive_formats = resp_data.get('adaptiveFormats')
+                resp_found = False
 
-                fmt['downloader_options']['expires_in'] = expires_in
-
-                for yt_fmt in adaptive_formats:
+                for yt_fmt in resp_data.get('adaptiveFormats'):
                     if (
+                            # FIXME: Watch out for the same itag with different language
                             not format_id.startswith(str(yt_fmt.get('itag')))
                             or yt_fmt.get('isDrc', False)
                     ):
@@ -65,9 +65,18 @@ class ClapperYoutubeIE(YoutubeIE):
                     if init_end <= init_start or index_end <= index_start:
                         continue
 
-                    fmt['downloader_options'].update({
+                    fmt['streaming_options'] = {
                         'init_range': f'{init_start}-{init_end}',
                         'index_range': f'{index_start}-{index_end}'
-                    })
+                    }
+                    expires_in = int(resp_data.get('expiresInSeconds') or 0)
+
+                    resp_found = True
+                    break
+
+                if resp_found:
+                    break
+
+            fmt['expires_in'] = expires_in
 
         return *formats, subtitles

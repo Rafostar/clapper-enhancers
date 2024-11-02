@@ -60,9 +60,9 @@ def _insert_representations(adapt, formats):
         base_url.text = fmt['url']
 
         # Existence ensured before calling this function
-        dwn_opts = fmt['downloader_options']
-        init_range = dwn_opts['init_range']
-        index_range = dwn_opts['index_range']
+        streaming = fmt['streaming_options']
+        init_range = streaming['init_range']
+        index_range = streaming['index_range']
 
         initialization = ET.SubElement(rep, 'Initialization')
         initialization.set('range', init_range)
@@ -92,9 +92,9 @@ def _add_adaptation_set(period, info, vcoding, acoding):
 
         if (url := fmt.get('url')): # isoff-on-demand
             if (
-                    not (dwn_opts := fmt.get('downloader_options'))
-                    or not dwn_opts.get('init_range')
-                    or not dwn_opts.get('index_range')
+                    not (streaming := fmt.get('streaming_options'))
+                    or not streaming.get('init_range')
+                    or not streaming.get('index_range')
             ):
                 continue
         else: # FIXME: isoff-live
