@@ -26,10 +26,15 @@ gi.require_version('Gst', '1.0')
 gi.require_version('Clapper', '0.0')
 from gi.repository import GLib, GObject, Gio, Gst, Clapper
 
-from yt_dlp import YoutubeDL
-from yt_dlp.extractor import gen_extractor_classes
+try:
+    from yt_dlp import YoutubeDL
+except ImportError:
+    YoutubeDL = None
 
-from clapper_yt_dlp_overrides import BLACKLIST, ClapperYoutubeIE
+if YoutubeDL:
+    from yt_dlp.extractor import gen_extractor_classes
+    from clapper_yt_dlp_overrides import BLACKLIST, ClapperYoutubeIE
+
 import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
 
@@ -51,15 +56,19 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
     _ytdl = None
 
     def __init__(self):
-        self._ytdl = YoutubeDL(YTDL_OPTS, auto_init=False)
+        if YoutubeDL:
+            self._ytdl = YoutubeDL(YTDL_OPTS, auto_init=False)
 
-        self._ytdl.add_info_extractor(ClapperYoutubeIE())
+            self._ytdl.add_info_extractor(ClapperYoutubeIE())
 
-        for ie in gen_extractor_classes():
-            if ie.ie_key() not in BLACKLIST:
-                self._ytdl.add_info_extractor(ie)
+            for ie in gen_extractor_classes():
+                if ie.ie_key() not in BLACKLIST:
+                    self._ytdl.add_info_extractor(ie)
 
     def do_extract(self, uri: GLib.Uri, harvest: Clapper.Harvest, cancellable: Gio.Cancellable):
+        if not YoutubeDL:
+            raise GLib.Error('Could not import "yt-dlp". Please check your installation.')
+
         # Not used during init, so we can alter it here
         self._ytdl.params['noplaylist'] = True
 
