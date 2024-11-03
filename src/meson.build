@@ -3,6 +3,8 @@ clapper_possible_enhancers = [
   'yt-dlp',
 ]
 
+subdir('utils')
+
 clapper_available_enhancers = []
 foreach name : clapper_possible_enhancers
   enhancer_option = get_option(name)

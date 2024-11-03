@@ -8,12 +8,33 @@ project('clapper-enhancers', 'c',
   ],
 )
 
+glib_req = '>= 2.76.0'
+
 optimization = get_option('optimization')
 build_optimized = optimization in ['2', '3', 's']
 
+glib_dep = dependency('glib-2.0',
+  version: glib_req,
+  required: false,
+)
+gobject_dep = dependency('gobject-2.0',
+  version: glib_req,
+  required: false,
+)
+gio_dep = dependency('gio-2.0',
+  version: glib_req,
+  required: false,
+)
+gmodule_dep = dependency('gmodule-2.0',
+  version: glib_req,
+  required: false,
+)
+peas_dep = dependency('libpeas-2',
+  required: false,
+)
 clapper_dep = dependency('clapper-0.0',
   version: meson.project_version(),
-  required: true,
+  required: false,
 )
 
 # Enhancers install dir is determined from libclapper compilation
