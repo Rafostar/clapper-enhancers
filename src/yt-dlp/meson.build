@@ -3,6 +3,7 @@ enhancer_data = [
   'clapper_yt_dlp.py',
   'clapper_yt_dlp_overrides.py',
   'clapper_yt_dlp_dash.py',
+  'clapper_yt_dlp_hls.py',
 ]
 
 install_data(

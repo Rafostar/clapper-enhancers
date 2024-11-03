@@ -31,6 +31,7 @@ from yt_dlp.extractor import gen_extractor_classes
 
 from clapper_yt_dlp_overrides import BLACKLIST, ClapperYoutubeIE
 import clapper_yt_dlp_dash as dash
+import clapper_yt_dlp_hls as hls
 
 YTDL_OPTS = {
     'quiet': True,
@@ -39,7 +40,7 @@ YTDL_OPTS = {
     'extract_flat': 'in_playlist',
     'extractor_args': {
         'youtube': {
-            'skip': ['hls', 'translated_subs'],
+            'skip': ['translated_subs'],
             'player_client': ['ios'],
             'player_skip': ['webpage', 'configs', 'js']
         }
@@ -71,15 +72,18 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if cancellable.is_cancelled():
             return False
 
-        manifest = dash.generate_manifest(info)
-        if not manifest:
+        if (manifest := dash.generate_manifest(info)):
+            media_type = 'application/dash+xml'
+        elif (manifest := hls.generate_manifest(info)):
+            media_type = 'application/x-hls'
+        else:
             raise GLib.Error('Could not generate playable manifest')
 
         # Check if cancelled during manifest generation
         if cancellable.is_cancelled():
             return False
 
-        harvest.fill('application/dash+xml', manifest)
+        harvest.fill(media_type, manifest)
 
         if (val := info.get('title')):
             harvest.tags_add(Gst.TAG_TITLE, val)

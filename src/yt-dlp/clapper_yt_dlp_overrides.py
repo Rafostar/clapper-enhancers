@@ -19,6 +19,7 @@
 # Boston, MA 02110-1301, USA.
 
 from yt_dlp.extractor.youtube import YoutubeIE
+from yt_dlp.utils import parse_m3u8_attributes
 
 BLACKLIST = [
     'Youtube',
@@ -80,3 +81,41 @@ class ClapperYoutubeIE(YoutubeIE):
             fmt['expires_in'] = expires_in
 
         return *formats, subtitles
+
+    def _parse_m3u8_formats_and_subtitles(
+            self, m3u8_doc, m3u8_url=None, ext=None, entry_protocol='m3u8_native',
+            preference=None, quality=None, m3u8_id=None, live=False, note=None,
+            errnote=None, fatal=True, data=None, headers={}, query={},
+            video_id=None):
+        formats, subtitles = super()._parse_m3u8_formats_and_subtitles(
+                m3u8_doc, m3u8_url, ext, entry_protocol,
+                preference, quality, m3u8_id, live, note,
+                errnote, fatal, data, headers, query,
+                video_id)
+
+        for line in m3u8_doc.splitlines():
+            if not line.startswith('#EXT-X-STREAM-INF:'):
+                continue
+
+            attributes = parse_m3u8_attributes(line)
+            bandwidth = attributes.get('BANDWIDTH')
+            audio_id = attributes.get('AUDIO')
+            captions_id = attributes.get('CLOSED-CAPTIONS')
+
+            if not bandwidth or not (audio_id or captions_id):
+                continue
+
+            for fmt in formats:
+                # Fix missing audio codecs
+                if (fmt.get('format_id').startswith(audio_id) and fmt.get('acodec', 'none') == 'none'):
+                    codecs_arr = attributes.get('CODECS').split(',')
+
+                    if len(codecs_arr) > 1:
+                        fmt['acodec'] = codecs_arr[1]
+
+                # Fix unknown audio/captions stream for video
+                if int((fmt.get('tbr') or 0) * 1000) == int(bandwidth):
+                    fmt['audio_id'] = audio_id
+                    fmt['captions_id'] = captions_id
+
+        return formats, subtitles
