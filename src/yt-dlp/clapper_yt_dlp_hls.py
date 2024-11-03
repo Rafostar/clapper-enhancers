@@ -145,7 +145,7 @@ def generate_manifest(info):
     success |= _add_streams(manifest, info, 'avc1', 'none')
 
     if not success:
-        success = _add_streams(period, info, 'avc1', 'mp4a')
+        success = _add_streams(manifest, info, 'avc1', 'mp4a')
 
     if not success:
         return None
