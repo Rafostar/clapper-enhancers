@@ -24,24 +24,24 @@ def _add_x_media(manifest, fmt):
     acodec = None if fmt['acodec'] == 'none' else fmt['acodec']
     media_type = 'AUDIO' if acodec else 'CLOSED-CAPTIONS'
 
-    manifest.write(f'#EXT-X-MEDIA:TYPE={media_type}'.encode())
+    manifest.write(f'#EXT-X-MEDIA:TYPE={media_type}')
 
     fmt_id = fmt['format_id']
-    manifest.write(f',GROUP-ID="{fmt_id}"'.encode())
+    manifest.write(f',GROUP-ID="{fmt_id}"')
 
     if (language := fmt.get('language')):
-        manifest.write(f',LANGUAGE="{language}"'.encode())
+        manifest.write(f',LANGUAGE="{language}"')
 
     fmt_name = fmt.get('format_note', 'Default')
-    manifest.write(f',NAME="{fmt_name}",DEFAULT=YES,AUTOSELECT=YES'.encode())
+    manifest.write(f',NAME="{fmt_name}",DEFAULT=YES,AUTOSELECT=YES')
 
     url = fmt['url']
-    manifest.write(f',URI="{url}"\n'.encode())
+    manifest.write(f',URI="{url}"\n')
 
 def _add_x_stream_inf(manifest, fmt, audio, captions):
     # Existence ensured before calling this function
     bandwidth = int(fmt['tbr'] * 1000)
-    manifest.write(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}'.encode())
+    manifest.write(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}')
 
     vcodec = None if fmt['vcodec'] == 'none' else fmt['vcodec']
     acodec = None if fmt['acodec'] == 'none' else fmt['acodec']
@@ -50,32 +50,32 @@ def _add_x_stream_inf(manifest, fmt, audio, captions):
         acodec = None if audio['acodec'] == 'none' else audio['acodec']
 
     if vcodec and acodec:
-        manifest.write(f',CODECS="{vcodec},{acodec}"'.encode())
+        manifest.write(f',CODECS="{vcodec},{acodec}"')
     else:
         codec = vcodec if vcodec else acodec
-        manifest.write(f',CODECS="{codec}"'.encode())
+        manifest.write(f',CODECS="{codec}"')
 
     width = fmt.get('width') or 0
     height = fmt.get('height') or 0
     if width > 0 and height > 0:
-        manifest.write(f',RESOLUTION={width}x{height}'.encode())
+        manifest.write(f',RESOLUTION={width}x{height}')
 
     if ((fps := fmt.get('fps') or 0) > 0):
-        manifest.write(f',FRAME-RATE={fps}'.encode())
+        manifest.write(f',FRAME-RATE={fps}')
 
     if (dyn_range := fmt.get('dynamic_range')):
-        manifest.write(f',VIDEO-RANGE={dyn_range}'.encode())
+        manifest.write(f',VIDEO-RANGE={dyn_range}')
 
     if vcodec and audio:
         audio_id = audio['format_id']
-        manifest.write(f',AUDIO="{audio_id}"'.encode())
+        manifest.write(f',AUDIO="{audio_id}"')
 
     if vcodec and captions:
         captions_id = captions['format_id']
-        manifest.write(f',CLOSED-CAPTIONS="{captions_id}"'.encode())
+        manifest.write(f',CLOSED-CAPTIONS="{captions_id}"')
 
     url = fmt['url']
-    manifest.write(f'\n{url}\n'.encode())
+    manifest.write(f'\n{url}\n')
 
 def _insert_streams(manifest, formats, matches):
     for fmt in formats:
@@ -135,10 +135,10 @@ def _add_streams(manifest, info, vcoding, acoding):
     return True
 
 def _make_manifest(info, vcoding, acoding, separate=False):
-    manifest = io.BytesIO()
+    manifest = io.StringIO()
     success = True
 
-    manifest.write('#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n'.encode())
+    manifest.write('#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n')
 
     if separate:
         # Start with audio stream as video streams often point to audio
@@ -160,7 +160,6 @@ def generate_manifest(info):
             or (manifest := _make_manifest(info, 'avc1', 'mp4a')) # Video + Audio combined
             or (manifest := _make_manifest(info, 'none', 'mp4a')) # Audio only
     ):
-        manifest.seek(0)
-        return manifest.read()
+        return manifest.getvalue()
 
     return None

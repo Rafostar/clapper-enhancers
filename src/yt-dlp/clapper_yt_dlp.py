@@ -95,7 +95,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if cancellable.is_cancelled():
             return False
 
-        harvest.fill(media_type, manifest)
+        harvest.fill_with_text(media_type, manifest)
 
         if (val := info.get('title')):
             harvest.tags_add(Gst.TAG_TITLE, val)

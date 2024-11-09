@@ -58,8 +58,8 @@ def _make_manifest(info, vext):
     if not best_format:
         return None
 
-    manifest = io.BytesIO()
-    manifest.write(best_format['url'].encode())
+    manifest = io.StringIO()
+    manifest.write(best_format['url'])
 
     return manifest
 
