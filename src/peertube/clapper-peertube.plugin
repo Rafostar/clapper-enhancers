@@ -1,0 +1,5 @@
+[Plugin]
+Module=clapper-peertube
+Name=peertube
+X-Interfaces=Extractable
+X-Schemes=peertube
