@@ -1,6 +1,7 @@
 # Utils
 all_c_utils = [
   'common',
+  'json',
 ]
 
 foreach name : all_c_utils
