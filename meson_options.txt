@@ -1,3 +1,8 @@
+option('peertube',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer PeerTube'
+)
 option('yt-dlp',
   type: 'feature',
   value: 'auto',
