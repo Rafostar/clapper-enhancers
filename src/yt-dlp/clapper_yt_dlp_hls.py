@@ -134,22 +134,33 @@ def _add_streams(manifest, info, vcoding, acoding):
 
     return True
 
-def generate_manifest(info):
+def _make_manifest(info, vcoding, acoding, separate=False):
     manifest = io.BytesIO()
-    success = False
+    success = True
 
     manifest.write('#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n'.encode())
 
-    # Start with audio stream as video streams often point to audio
-    success |= _add_streams(manifest, info, 'none', 'mp4a')
-    success |= _add_streams(manifest, info, 'avc1', 'none')
-
-    if not success:
-        success = _add_streams(manifest, info, 'avc1', 'mp4a')
+    if separate:
+        # Start with audio stream as video streams often point to audio
+        if acoding != 'none':
+            success &= _add_streams(manifest, info, 'none', acoding)
+        if vcoding != 'none':
+            success &= _add_streams(manifest, info, vcoding, 'none')
+    else:
+        success = _add_streams(manifest, info, vcoding, acoding)
 
     if not success:
         return None
 
-    manifest.seek(0)
+    return manifest
 
-    return manifest.read()
+def generate_manifest(info):
+    if (
+            (manifest := _make_manifest(info, 'avc1', 'mp4a', True)) # Video + Audio separately
+            or (manifest := _make_manifest(info, 'avc1', 'mp4a')) # Video + Audio combined
+            or (manifest := _make_manifest(info, 'none', 'mp4a')) # Audio only
+    ):
+        manifest.seek(0)
+        return manifest.read()
+
+    return None
