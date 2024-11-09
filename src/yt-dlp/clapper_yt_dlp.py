@@ -37,6 +37,7 @@ if YoutubeDL:
 
 import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
+import clapper_yt_dlp_direct as direct
 
 YTDL_OPTS = {
     'quiet': True,
@@ -85,6 +86,8 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
             media_type = 'application/dash+xml'
         elif (manifest := hls.generate_manifest(info)):
             media_type = 'application/x-hls'
+        elif (manifest := direct.generate_manifest(info)):
+            media_type = 'text/uri-list'
         else:
             raise GLib.Error('Could not generate playable manifest')
 
