@@ -184,4 +184,4 @@ def generate_manifest(info):
 
     ET.indent(mpd)
 
-    return ET.tostring(mpd, encoding='UTF-8', xml_declaration=True)
+    return ET.tostring(mpd, encoding='unicode', xml_declaration=True)
