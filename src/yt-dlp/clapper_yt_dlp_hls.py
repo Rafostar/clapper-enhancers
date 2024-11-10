@@ -22,7 +22,7 @@ def _add_x_media(manifest, fmt):
     acodec = None if fmt['acodec'] == 'none' else fmt['acodec']
     media_type = 'AUDIO' if acodec else 'CLOSED-CAPTIONS'
 
-    manifest.write(f'#EXT-X-MEDIA:TYPE={media_type}')
+    manifest.write(f'\n#EXT-X-MEDIA:TYPE={media_type}')
 
     fmt_id = fmt['format_id']
     manifest.write(f',GROUP-ID="{fmt_id}"')
@@ -34,12 +34,12 @@ def _add_x_media(manifest, fmt):
     manifest.write(f',NAME="{fmt_name}",DEFAULT=YES,AUTOSELECT=YES')
 
     url = fmt['url']
-    manifest.write(f',URI="{url}"\n')
+    manifest.write(f',URI="{url}"')
 
 def _add_x_stream_inf(manifest, fmt, audio, captions):
     # Existence ensured before calling this function
     bandwidth = int(fmt['tbr'] * 1000)
-    manifest.write(f'#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}')
+    manifest.write(f'\n#EXT-X-STREAM-INF:BANDWIDTH={bandwidth}')
 
     vcodec = None if fmt['vcodec'] == 'none' else fmt['vcodec']
     acodec = None if fmt['acodec'] == 'none' else fmt['acodec']
@@ -73,7 +73,7 @@ def _add_x_stream_inf(manifest, fmt, audio, captions):
         manifest.write(f',CLOSED-CAPTIONS="{captions_id}"')
 
     url = fmt['url']
-    manifest.write(f'\n{url}\n')
+    manifest.write(f'\n{url}')
 
 def _insert_streams(manifest, formats, matches):
     for fmt in formats:
@@ -136,7 +136,7 @@ def _make_manifest(info, vcoding, acoding, separate=False):
     manifest = io.StringIO()
     success = True
 
-    manifest.write('#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS\n')
+    manifest.write('#EXTM3U\n#EXT-X-INDEPENDENT-SEGMENTS')
 
     if separate:
         # Start with audio stream as video streams often point to audio

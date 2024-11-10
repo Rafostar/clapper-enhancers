@@ -169,15 +169,24 @@ def generate_manifest(info):
 
         period = ET.SubElement(mpd, 'Period')
 
-        success |= _add_adaptation_set(period, info, 'avc1', 'none')
-        success |= _add_adaptation_set(period, info, 'none', 'mp4a')
+        vcodings = ['avc1', 'av01', 'hev1', 'vp09']
+        acodings = ['mp4a', 'opus']
+
+        for vcoding in vcodings:
+            if (_add_adaptation_set(period, info, vcoding, 'none')):
+                success = True
+                break
+        for acoding in acodings:
+            if (_add_adaptation_set(period, info, 'none', acoding)):
+                success = True
+                break
 
         # If separate failed, try combined
         if not success:
-            success = _add_adaptation_set(period, info, 'avc1', 'mp4a')
-
-        #success |= _add_adaptation_set(period, info, 'vp09', 'none')
-        #success |= _add_adaptation_set(period, info, 'none', 'opus')
+            for vcoding in vcodings:
+                for acoding in acodings:
+                    if (success := _add_adaptation_set(period, info, vcoding, acoding)):
+                        break
 
     if not success:
         return None
