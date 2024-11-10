@@ -74,11 +74,11 @@ _make_api_message (ClapperPeertube *self, GUri *uri, const gchar *video_id)
 static gboolean
 _read_uris_array_cb (JsonReader *reader, ClapperHarvest *harvest, const gchar *key_str)
 {
-  gchar *uri;
+  const gchar *uri;
   gboolean filled = FALSE;
 
-  if ((uri = g_strdup (json_utils_get_string (reader, key_str, NULL))))
-    filled = clapper_harvest_fill (harvest, "text/uri-list", uri, strlen (uri));
+  if ((uri = json_utils_get_string (reader, key_str, NULL)))
+    filled = clapper_harvest_fill_with_text (harvest, "text/uri-list", g_strdup (uri));
 
   return !filled;
 }
