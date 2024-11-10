@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 # Clapper Enhancer yt-dlp
 # Copyright (C) 2024 Rafał Dzięgiel <rafostar.github@gmail.com>
 #
