@@ -108,7 +108,9 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
                 harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
 
         # XXX: We just take headers from any format here, do we need to find/combine some?
-        if (req_fmt := info.get('requested_formats')) and (hdrs := req_fmt[0].get('http_headers')):
-            [harvest.headers_set(key, val) for key, val in hdrs.items()]
+        for fmt in info['formats']:
+            if (hdrs := fmt.get('http_headers')):
+                [harvest.headers_set(key, val) for key, val in hdrs.items()]
+                break
 
         return True
