@@ -1,0 +1,10 @@
+rebuild_master:
+  steps:
+    - trigger_services:
+        project: home:Rafostar
+        package: clapper-enhancers
+  filters:
+    event: push
+    branches:
+      only:
+        - main
