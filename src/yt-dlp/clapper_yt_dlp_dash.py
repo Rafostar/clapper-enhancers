@@ -214,11 +214,20 @@ def generate_manifest(info):
         period = ET.SubElement(mpd, 'Period')
 
         vcodings = ['avc1', 'av01', 'hev1', 'vp09']
-        acodings = ['mp4a', 'opus']
+        acodings = [] # Possibilities depend on selected vcoding
 
         for vcoding in vcodings:
             if (success := _add_adaptation_set(period, info, vcoding, 'none')):
+                if vcoding in ['avc1', 'av01', 'hev1']:
+                    acodings += ['mp4a']
+                elif vcoding in ['vp09']:
+                    acodings += ['opus']
+
                 break
+
+        # No video, allow any supported audio for audio-only
+        if not success:
+            acodings = ['mp4a', 'opus']
 
         success |= _add_audio_adaptation_sets(period, info, acodings)
 
