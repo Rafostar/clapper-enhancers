@@ -69,7 +69,7 @@ def _insert_representations(adapt, formats):
         segment_base.set('indexRange', index_range)
         segment_base.set('indexRangeExact', 'true')
 
-def _add_adaptation_set(period, info, vcoding, acoding):
+def _add_adaptation_set(period, info, vcoding, acoding, lang=None):
     max_w = 0
     max_h = 0
     max_fps = 0
@@ -79,7 +79,8 @@ def _add_adaptation_set(period, info, vcoding, acoding):
     for fmt in info['formats']:
         # Ensure all required values before creating an adaptation set
         if (
-                not ((val := fmt.get('container')) and val.endswith('_dash'))
+                (lang and fmt.get('language') != lang)
+                or not ((val := fmt.get('container')) and val.endswith('_dash'))
                 or not fmt.get('vcodec', 'none').startswith(vcoding)
                 or not fmt.get('acodec', 'none').startswith(acoding)
                 or not ((val := fmt.get('ext')) and not val == 'none')
@@ -142,10 +143,53 @@ def _add_adaptation_set(period, info, vcoding, acoding):
         adapt.set('par', f'{max_w // div}:{max_h // div}')
     if max_fps > 0:
         adapt.set('maxFrameRate', str(max_fps))
+    if lang:
+        # Convert to ISO-639
+        adapt.set('lang', lang.split('-')[0])
 
     _insert_representations(adapt, formats)
 
     return True
+
+def _add_audio_adaptation_sets(period, info, acodings):
+    success = False
+    languages = []
+
+    # Find languages and determine default one
+    preference = 0
+    default_lang = None
+    for fmt in info['formats']:
+        if not (lang := fmt.get('language')):
+            continue
+
+        if (lang_pref := fmt.get('language_preference') or 0) > preference:
+            # Append remembered language if not in array yet before replacement
+            if default_lang and default_lang not in languages:
+                languages.append(default_lang)
+
+            # Replace with new default
+            default_lang = lang
+            preference = lang_pref
+        elif lang != default_lang and lang not in languages:
+            languages.append(lang)
+
+    if default_lang:
+        languages.insert(0, default_lang)
+
+    for acoding in acodings:
+        # Add an adaptiation set for each language
+        for lang in languages:
+            success |= _add_adaptation_set(period, info, 'none', acoding, lang)
+
+        # Fallback for undetermined language
+        if not success:
+            success |= _add_adaptation_set(period, info, 'none', acoding)
+
+        # At least one language for acoding added
+        if success:
+            break
+
+    return success
 
 def generate_manifest(info):
     success = False
@@ -170,16 +214,22 @@ def generate_manifest(info):
         period = ET.SubElement(mpd, 'Period')
 
         vcodings = ['avc1', 'av01', 'hev1', 'vp09']
-        acodings = ['mp4a', 'opus']
+        acodings = [] # Possibilities depend on selected vcoding
 
         for vcoding in vcodings:
-            if (_add_adaptation_set(period, info, vcoding, 'none')):
-                success = True
+            if (success := _add_adaptation_set(period, info, vcoding, 'none')):
+                if vcoding in ['avc1', 'av01', 'hev1']:
+                    acodings += ['mp4a']
+                elif vcoding in ['vp09']:
+                    acodings += ['opus']
+
                 break
-        for acoding in acodings:
-            if (_add_adaptation_set(period, info, 'none', acoding)):
-                success = True
-                break
+
+        # No video, allow any supported audio for audio-only
+        if not success:
+            acodings = ['mp4a', 'opus']
+
+        success |= _add_audio_adaptation_sets(period, info, acodings)
 
         # If separate failed, try combined
         if not success:
