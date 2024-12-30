@@ -33,8 +33,8 @@ if YoutubeDL:
     from yt_dlp.extractor import gen_extractor_classes
     from clapper_yt_dlp_overrides import BLACKLIST, ClapperYoutubeIE
 
-import clapper_yt_dlp_dash as dash
-import clapper_yt_dlp_hls as hls
+import dash_utils as dash
+import hls_utils as hls
 import clapper_yt_dlp_direct as direct
 
 YTDL_OPTS = {
