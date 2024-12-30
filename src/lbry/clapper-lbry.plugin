@@ -1,0 +1,6 @@
+[Plugin]
+Module=clapper-lbry
+Name=LBRY
+X-Interfaces=Extractable
+X-Schemes=http;https;lbry
+X-Hosts=odysee.com

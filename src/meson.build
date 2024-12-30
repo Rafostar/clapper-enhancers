@@ -1,5 +1,6 @@
 # Enhancers
 clapper_possible_enhancers = [
+  'lbry',
   'peertube',
   'yt-dlp',
 ]
