@@ -24,6 +24,8 @@
 #include <libpeas.h>
 #include <clapper/clapper.h>
 
+#include <gst/gst.h>
+#include <gst/tag/tag.h>
 #include <libsoup/soup.h>
 
 #include "../utils/c/common/common-utils.h"
