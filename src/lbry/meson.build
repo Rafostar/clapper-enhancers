@@ -4,32 +4,9 @@ enhancer_deps += [
   dependency('libsoup-3.0', required: false),
   json_utils_dep,
 ]
-foreach dep : enhancer_deps
-  if not dep.found()
-    if enhancer_option.enabled()
-      error('@0@ enhancer was enabled, but required dependencies were not found'.format(name))
-    endif
-    subdir_done()
-  endif
-endforeach
-
-enhancer_data = [
-  'clapper-lbry.plugin',
+enhancer_data += [
+  'lbry/clapper-lbry.plugin',
 ]
-enhancer_sources = [
-  'clapper-lbry.c',
+enhancer_sources += [
+  'lbry/clapper-lbry.c',
 ]
-
-library(
-  'clapper-lbry',
-  enhancer_sources,
-  dependencies: enhancer_deps,
-  c_args: enhancer_c_args,
-  install: true,
-  install_dir: enhancer_install_dir,
-)
-install_data(
-  enhancer_data,
-  install_dir: enhancer_install_dir,
-)
-clapper_available_enhancers += name
