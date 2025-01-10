@@ -24,14 +24,19 @@ def _add_x_media(manifest, fmt):
 
     manifest.write(f'\n#EXT-X-MEDIA:TYPE={media_type}')
 
-    fmt_id = fmt['format_id']
+    fmt_id = fmt['format_id'].split('-')[0]
     manifest.write(f',GROUP-ID="{fmt_id}"')
 
     if (language := fmt.get('language')):
-        manifest.write(f',LANGUAGE="{language}"')
+        # Convert to ISO-639
+        lang = language.split('-')[0]
+        manifest.write(f',LANGUAGE="{lang}"')
 
     fmt_name = fmt.get('format_note', 'Default')
-    manifest.write(f',NAME="{fmt_name}",DEFAULT=YES,AUTOSELECT=YES')
+    manifest.write(f',NAME="{fmt_name}"')
+
+    is_default = 'YES' if (fmt.get('language_preference') or 0) > 0 else 'NO'
+    manifest.write(f',DEFAULT={is_default},AUTOSELECT=YES')
 
     url = fmt['url']
     manifest.write(f',URI="{url}"')
@@ -65,11 +70,11 @@ def _add_x_stream_inf(manifest, fmt, audio, captions):
         manifest.write(f',VIDEO-RANGE={dyn_range}')
 
     if vcodec and audio:
-        audio_id = audio['format_id']
+        audio_id = fmt['audio_id']
         manifest.write(f',AUDIO="{audio_id}"')
 
     if vcodec and captions:
-        captions_id = captions['format_id']
+        captions_id = fmt['captions_id']
         manifest.write(f',CLOSED-CAPTIONS="{captions_id}"')
 
     url = fmt['url']
@@ -84,9 +89,9 @@ def _insert_streams(manifest, formats, matches):
             captions = None
 
             if (audio_id := fmt.get('audio_id')):
-                audio = next(filter(lambda m: m['format_id'] == audio_id, matches), None)
+                audio = next(filter(lambda m: m['format_id'].split('-')[0] == audio_id, matches), None)
             if (captions_id := fmt.get('captions_id')):
-                captions = next(filter(lambda m: m['format_id'] == captions_id, matches), None)
+                captions = next(filter(lambda m: m['format_id'].split('-')[0] == captions_id, matches), None)
 
             _add_x_stream_inf(manifest, fmt, audio, captions)
         else:
@@ -112,9 +117,9 @@ def _add_streams(manifest, info, vcoding, acoding):
             if (height := fmt.get('height') or 0) < 240:
                 continue
 
-            if ((audio_id := fmt.get('audio_id')) and not any(m['format_id'] == audio_id for m in matches)):
+            if ((audio_id := fmt.get('audio_id')) and not any(m['format_id'].split('-')[0] == audio_id for m in matches)):
                 for audio_fmt in info['formats']:
-                    if (audio_fmt.get('format_id') == audio_id):
+                    if (audio_fmt.get('format_id', '').split('-')[0] == audio_id):
                         matches.append(audio_fmt)
 
         if acoding != 'none':

@@ -104,8 +104,13 @@ class ClapperYoutubeIE(YoutubeIE):
                 continue
 
             for fmt in formats:
+                if not (format_id := fmt.get('format_id')):
+                    continue
+
+                group_id = format_id.split('-')[0]
+
                 # Fix missing audio codecs
-                if (fmt.get('format_id').startswith(audio_id) and fmt.get('acodec', 'none') == 'none'):
+                if (group_id == audio_id and fmt.get('acodec', 'none') == 'none'):
                     codecs_arr = attributes.get('CODECS').split(',')
 
                     if len(codecs_arr) > 1:
