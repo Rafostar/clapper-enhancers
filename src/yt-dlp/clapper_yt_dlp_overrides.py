@@ -37,16 +37,25 @@ class ClapperYoutubeIE(YoutubeIE):
                 continue
 
             expires_in = 0
+            itag = format_id.split('-')[0]
+            lang = (language := fmt.get('language')) and language.split('-')[0]
 
             for resp_data in streaming_data:
                 resp_found = False
 
                 for yt_fmt in resp_data.get('adaptiveFormats'):
+                    # Find format with the same itag
                     if (
-                            # FIXME: Watch out for the same itag with different language
-                            not format_id.startswith(str(yt_fmt.get('itag')))
+                            itag != str(yt_fmt.get('itag') or 0)
                             or yt_fmt.get('isDrc', False)
                     ):
+                        continue
+
+                    # Special cases in YT formats: "en.4"
+                    yt_lang = (yt_atrack := yt_fmt.get('audioTrack')) and yt_atrack['id'].split('-')[0].split('.')[0]
+
+                    # Youtube uses the same itag for different languages, so language must also match
+                    if (lang != yt_lang):
                         continue
 
                     init_range = yt_fmt.get('initRange')
