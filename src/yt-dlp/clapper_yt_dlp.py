@@ -45,8 +45,7 @@ YTDL_OPTS = {
     'extractor_args': {
         'youtube': {
             'skip': ['translated_subs'],
-            'player_client': ['ios'],
-            'player_skip': ['webpage', 'configs', 'js']
+            'player_client': ['ios']
         }
     }
 }
