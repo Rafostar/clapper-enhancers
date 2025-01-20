@@ -36,7 +36,6 @@ class ClapperYoutubeIE(YoutubeIE):
             if not (format_id := fmt.get('format_id')):
                 continue
 
-            expires_in = 0
             itag = format_id.split('-')[0]
             lang = (language := fmt.get('language')) and language.split('-')[0]
 
@@ -77,15 +76,12 @@ class ClapperYoutubeIE(YoutubeIE):
                         'init_range': f'{init_start}-{init_end}',
                         'index_range': f'{index_start}-{index_end}'
                     }
-                    expires_in = int(resp_data.get('expiresInSeconds') or 0)
 
                     resp_found = True
                     break
 
                 if resp_found:
                     break
-
-            fmt['expires_in'] = expires_in
 
         return *formats, subtitles
 
