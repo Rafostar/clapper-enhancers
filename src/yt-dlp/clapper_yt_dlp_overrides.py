@@ -16,6 +16,8 @@
 # Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
+import re
+
 from yt_dlp.extractor.youtube import YoutubeIE
 from yt_dlp.utils import parse_m3u8_attributes
 
@@ -28,6 +30,8 @@ class ClapperYoutubeIE(YoutubeIE):
     @classmethod
     def ie_key(cls):
         return cls.__name__[7:-2]
+
+    _ITAG_PATTERN = re.compile(r'/itag/(\d+)')
 
     def _extract_formats_and_subtitles(self, streaming_data, video_id, player_url, live_status, duration):
         *formats, subtitles = super()._extract_formats_and_subtitles(streaming_data, video_id, player_url, live_status, duration)
@@ -109,8 +113,11 @@ class ClapperYoutubeIE(YoutubeIE):
                 continue
 
             for fmt in formats:
+                # Format ID might not be extracted here yet
                 if not (format_id := fmt.get('format_id')):
-                    continue
+                    match = self._ITAG_PATTERN.search(fmt['url'])
+                    if not (format_id := match and match.group()):
+                        continue
 
                 group_id = format_id.split('-')[0]
 
