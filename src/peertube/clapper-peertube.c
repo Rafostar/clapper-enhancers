@@ -131,13 +131,13 @@ clapper_peertube_extract (ClapperExtractable *extractable, GUri *uri, ClapperHar
   GST_DEBUG_OBJECT (self, "Extract");
 
   if (!(video_id = common_utils_match_regex (
-      "/(?:videos/(?:watch|embed)|w)/([A-Za-z0-9]+)", g_uri_get_path (uri)))) {
+      "/(?:videos/(?:watch|embed)|w)/([A-Za-z0-9-]+)", g_uri_get_path (uri)))) {
     g_set_error (error, G_IO_ERROR, G_IO_ERROR_FAILED,
         "Could not determine video ID from URI");
     return FALSE;
   }
 
-  GST_DEBUG_OBJECT (self, "Creating API request");
+  GST_DEBUG_OBJECT (self, "Creating API request, video ID: %s", video_id);
   msg = _make_api_message (self, uri, video_id);
   g_free (video_id);
 
