@@ -41,8 +41,11 @@ clapper_dep = dependency('clapper-0.0',
   required: false,
 )
 
-# Enhancers install dir is determined from libclapper compilation
-clapper_enhancers_dir = clapper_dep.get_variable('enhancersdir')
+# Unless custom dir is set, enhancers dir is determined from libclapper compilation
+clapper_enhancers_dir = get_option('enhancersdir').strip()
+if clapper_enhancers_dir == ''
+  clapper_enhancers_dir = clapper_dep.get_variable('enhancersdir')
+endif
 
 cc = meson.get_compiler('c')
 

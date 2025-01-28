@@ -1,3 +1,11 @@
+# Build
+option('enhancersdir',
+  type : 'string',
+  value : '',
+  description : 'Set custom enhancers install directory'
+)
+
+# Enhancers
 option('lbry',
   type: 'feature',
   value: 'auto',
