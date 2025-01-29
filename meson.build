@@ -1,5 +1,5 @@
 project('clapper-enhancers', 'c',
-  version: '0.8.1', # major and minor numbers indicate required libclapper version
+  version: '0.8.2', # major and minor numbers indicate required libclapper version
   meson_version: '>= 0.64.0',
   license: 'LGPL-2.1-or-later',
   default_options: [
