@@ -1,6 +1,8 @@
 [Plugin]
 Module=clapper-lbry
 Name=LBRY
+Description=Play videos from Odysee
+Version=@VERSION@
 X-Interfaces=Extractable
 X-Schemes=http;https;lbry
 X-Hosts=odysee.com

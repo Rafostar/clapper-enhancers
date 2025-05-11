@@ -16,6 +16,7 @@ foreach name : clapper_possible_enhancers
     enhancer_deps = []
     enhancer_data = []
     enhancer_sources = []
+    enhancer_plugin_template = ''
     enhancer_configurable = false
 
     split_name_arr = name.split('-')
@@ -62,6 +63,17 @@ foreach name : clapper_possible_enhancers
           dependencies: enhancer_deps,
           include_directories: inc_dir,
           c_args: enhancer_c_args,
+          install: true,
+          install_dir: enhancer_install_dir,
+        )
+      endif
+      if enhancer_plugin_template != ''
+        plugin_conf = configuration_data()
+        plugin_conf.set('VERSION', meson.project_version())
+        configure_file(
+          input: join_paths(name, enhancer_plugin_template),
+          output: enhancer_plugin_template.replace('.in', ''),
+          configuration: plugin_conf,
           install: true,
           install_dir: enhancer_install_dir,
         )
