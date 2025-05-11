@@ -8,12 +8,15 @@ clapper_possible_enhancers = [
 subdir('utils')
 
 clapper_available_enhancers = []
+clapper_configurable_enhancers = []
+
 foreach name : clapper_possible_enhancers
   enhancer_option = get_option(name)
   if not enhancer_option.disabled()
     enhancer_deps = []
     enhancer_data = []
     enhancer_sources = []
+    enhancer_configurable = false
 
     split_name_arr = name.split('-')
     name_upper = ''
@@ -28,8 +31,11 @@ foreach name : clapper_possible_enhancers
     inc_dir = include_directories(name)
 
     # Common boilerplate for any enhancer that has sources to be build
+    if enhancer_sources.length() > 0 or enhancer_configurable
+      enhancer_deps += [glib_dep, gio_dep, clapper_dep]
+    endif
     if enhancer_sources.length() > 0
-      enhancer_deps += [glib_dep, gobject_dep, gio_dep, gmodule_dep, peas_dep, clapper_dep]
+      enhancer_deps += [gobject_dep, gmodule_dep, peas_dep]
     endif
 
     can_build = true
@@ -61,6 +67,28 @@ foreach name : clapper_possible_enhancers
         )
       endif
       clapper_available_enhancers += name
+      if enhancer_configurable
+        clapper_configurable_enhancers += name
+      endif
     endif
   endif
 endforeach
+
+if clapper_configurable_enhancers.length() > 0
+  clapper_functionalities = clapper_dep.get_variable('functionalities').split()
+
+  if not (clapper_functionalities.contains('enhancers-loader'))
+    error('Cannot compile schemas without Clapper built with "enhancers-loader"')
+  endif
+
+  # Used inside "gen-schemas" executable
+  find_program('glib-compile-schemas', required: true)
+
+  gen_schemas_bin = executable(
+    'gen-schemas',
+    ['gen-schemas.c'],
+    dependencies: [glib_dep, gio_dep, clapper_dep],
+    install: false,
+  )
+  meson.add_install_script(gen_schemas_bin, clapper_enhancers_dir, ','.join(clapper_configurable_enhancers))
+endif
