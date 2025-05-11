@@ -51,6 +51,15 @@ YTDL_OPTS = {
 }
 
 class ClapperYtDlp(GObject.Object, Clapper.Extractable):
+    if Clapper.MINOR_VERSION >= 9:
+        codecs_order = GObject.Property(type=str, nick='Codecs Order',
+            blurb='Comma-separated order of preferred video codecs',
+            default='avc1,av01,hev1,vp09',
+            flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL)
+        )
+    else:
+        codecs_order = 'avc1,av01,hev1,vp09'
+
     _ytdl = None
 
     def __init__(self):
@@ -79,11 +88,15 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if cancellable.is_cancelled():
             return False
 
-        if (manifest := dash.generate_manifest(info)):
+        opts = {
+            'vcodings': list(map(str.strip, self.codecs_order.split(',')))
+        }
+
+        if (manifest := dash.generate_manifest(info, opts)):
             media_type = 'application/dash+xml'
-        elif (manifest := hls.generate_manifest(info)):
+        elif (manifest := hls.generate_manifest(info, opts)):
             media_type = 'application/x-hls'
-        elif (manifest := direct.generate_manifest(info)):
+        elif (manifest := direct.generate_manifest(info, opts)):
             media_type = 'text/uri-list'
         else:
             raise GLib.Error('Could not generate playable manifest')

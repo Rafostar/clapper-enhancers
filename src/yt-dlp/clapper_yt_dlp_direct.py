@@ -18,13 +18,14 @@
 
 import io
 
-def _make_manifest(info, vext):
+def _make_manifest(info, vcoding, vext):
     best_format = None
 
     for fmt in info['formats']:
         if (
                 fmt.get('protocol') != 'https'
-                or fmt.get('video_ext') != vext
+                or (vcoding and not fmt.get('vcodec', 'none').startswith(vcoding))
+                or (vext and fmt.get('video_ext') != vext)
                 or not fmt.get('url')
         ):
             continue
@@ -61,10 +62,14 @@ def _make_manifest(info, vext):
 
     return manifest
 
-def generate_manifest(info):
+def generate_manifest(info, opts):
+    for vcoding in opts['vcodings']:
+        if (manifest := _make_manifest(info, vcoding, None)):
+            return manifest.getvalue()
+
     if (
-            (manifest := _make_manifest(info, 'mp4'))
-            or (manifest := _make_manifest(info, 'none')) # Audio only
+            (manifest := _make_manifest(info, None, 'mp4'))
+            or (manifest := _make_manifest(info, None, 'none')) # Audio only
     ):
         return manifest.getvalue()
 

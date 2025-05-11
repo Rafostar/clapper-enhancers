@@ -191,7 +191,7 @@ def _add_audio_adaptation_sets(period, info, acodings):
 
     return success
 
-def generate_manifest(info):
+def generate_manifest(info, opts):
     success = False
 
     if (duration := int(info.get('duration') or 0)):
@@ -213,10 +213,9 @@ def generate_manifest(info):
 
         period = ET.SubElement(mpd, 'Period')
 
-        vcodings = ['avc1', 'av01', 'hev1', 'vp09']
         acodings = [] # Possibilities depend on selected vcoding
 
-        for vcoding in vcodings:
+        for vcoding in opts['vcodings']:
             if (success := _add_adaptation_set(period, info, vcoding, 'none')):
                 if vcoding in ['avc1', 'av01', 'hev1']:
                     acodings += ['mp4a']
@@ -233,7 +232,7 @@ def generate_manifest(info):
 
         # If separate failed, try combined
         if not success:
-            for vcoding in vcodings:
+            for vcoding in opts['vcodings']:
                 for acoding in acodings:
                     if (success := _add_adaptation_set(period, info, vcoding, acoding)):
                         break
