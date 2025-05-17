@@ -157,12 +157,15 @@ def _make_manifest(info, vcoding, acoding, separate=False):
 
     return manifest
 
-def generate_manifest(info):
-    if (
-            (manifest := _make_manifest(info, 'avc1', 'mp4a', True)) # Video + Audio separately
-            or (manifest := _make_manifest(info, 'avc1', 'mp4a')) # Video + Audio combined
-            or (manifest := _make_manifest(info, 'none', 'mp4a')) # Audio only
-    ):
+def generate_manifest(info, opts):
+    for vcoding in opts['vcodings']:
+        if (
+                (manifest := _make_manifest(info, vcoding, 'mp4a', True)) # Video + Audio separately
+                or (manifest := _make_manifest(info, vcoding, 'mp4a')) # Video + Audio combined
+        ):
+            return manifest.getvalue()
+
+    if (manifest := _make_manifest(info, 'none', 'mp4a')): # Audio only
         return manifest.getvalue()
 
     return None

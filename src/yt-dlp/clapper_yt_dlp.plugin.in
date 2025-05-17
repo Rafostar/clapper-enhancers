@@ -2,6 +2,8 @@
 Module=clapper_yt_dlp
 Loader=python
 Name=yt-dlp
+Description=Media extraction using yt-dlp
+Version=@VERSION@
 X-Interfaces=Extractable
 X-Schemes=https
 X-Hosts=youtube.com;youtu.be;music.youtube.com;twitch.tv;clips.twitch.tv
