@@ -6,9 +6,6 @@ utils_deps = [
 
 foreach dep : utils_deps
   if not dep.found()
-    if utils_option.enabled()
-      error('@0@ utils were enabled, but required dependencies were not found'.format(name))
-    endif
     subdir_done()
   endif
 endforeach
