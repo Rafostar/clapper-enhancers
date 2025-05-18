@@ -63,6 +63,11 @@ YTDL_OPTS = {
     }
 }
 
+EXPIRATIONS = {
+    'youtube': 900, # 15 minutes
+    'default': 180 # 3 minutes
+}
+
 class ClapperYtDlp(GObject.Object, Clapper.Extractable):
     if Clapper.MINOR_VERSION >= 9:
         codecs_order = GObject.Property(type=str, nick='Codecs Order',
@@ -137,5 +142,8 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
             if (hdrs := fmt.get('http_headers')):
                 [harvest.headers_set(key, val) for key, val in hdrs.items()]
                 break
+
+        if Clapper.MINOR_VERSION >= 9 and not info.get('is_live'):
+            harvest.set_expiration_seconds(EXPIRATIONS.get(info.get('extractor'), EXPIRATIONS['default']))
 
         return True
