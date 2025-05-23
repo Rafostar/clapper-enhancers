@@ -27,15 +27,18 @@ def _add_x_media(manifest, fmt):
     fmt_id = fmt['format_id'].split('-')[0]
     manifest.write(f',GROUP-ID="{fmt_id}"')
 
-    if (language := fmt.get('language')):
+    is_default = 'YES'
+
+    # NOTE: GStreamer expects variants of single language to have the same NAME
+    if ((language := fmt.get('language')) and language != 'none'):
         # Convert to ISO-639
         lang = language.split('-')[0]
         manifest.write(f',LANGUAGE="{lang}"')
+        manifest.write(f',NAME="{language}"')
+        is_default = 'YES' if (fmt.get('language_preference') or 0) > 0 else 'NO'
+    else:
+        manifest.write(f',NAME="Default"')
 
-    fmt_name = fmt.get('format_note', 'Default')
-    manifest.write(f',NAME="{fmt_name}"')
-
-    is_default = 'YES' if (fmt.get('language_preference') or 0) > 0 else 'NO'
     manifest.write(f',DEFAULT={is_default},AUTOSELECT=YES')
 
     url = fmt['url']
