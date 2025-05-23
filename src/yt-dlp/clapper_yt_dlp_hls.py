@@ -32,8 +32,8 @@ def _add_x_media(manifest, fmt):
         lang = language.split('-')[0]
         manifest.write(f',LANGUAGE="{lang}"')
 
-    fmt_name = fmt.get('format_note', 'Default')
-    manifest.write(f',NAME="{fmt_name}"')
+    # NOTE: GStreamer expects variants to have the same name
+    manifest.write(f',NAME="Default"')
 
     is_default = 'YES' if (fmt.get('language_preference') or 0) > 0 else 'NO'
     manifest.write(f',DEFAULT={is_default},AUTOSELECT=YES')
