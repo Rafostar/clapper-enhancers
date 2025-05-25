@@ -160,15 +160,20 @@ def _make_manifest(info, vcoding, acoding, separate=False):
 
     return manifest
 
-def generate_manifest(info, opts):
-    for vcoding in opts['vcodings']:
-        if (
-                (manifest := _make_manifest(info, vcoding, 'mp4a', True)) # Video + Audio separately
-                or (manifest := _make_manifest(info, vcoding, 'mp4a')) # Video + Audio combined
-        ):
-            return manifest.getvalue()
+def generate_manifest(info):
+    # Check if HLS is requested
+    if not ((protocol := info.get('protocol')) and protocol.startswith('m3u8_native')):
+        return None
 
-    if (manifest := _make_manifest(info, 'none', 'mp4a')): # Audio only
+    separate = (len(protocol.split('+')) > 1)
+    vcoding = (info.get('vcodec') or 'none')[:4]
+    acoding = (info.get('acodec') or 'none')[:4]
+
+    if vcoding == acoding or (separate and 'none' in {vcoding, acoding}):
+        return None
+
+    # Video + Audio separately if more than 1 format, otherwise combined
+    if (manifest := _make_manifest(info, vcoding, acoding, separate)):
         return manifest.getvalue()
 
     return None

@@ -18,59 +18,16 @@
 
 import io
 
-def _make_manifest(info, vcoding, vext):
-    best_format = None
+def generate_manifest(info):
+    # Check if direct stream is requested
+    if not ((val := info.get('protocol')) and val == 'https'):
+        return None
 
-    for fmt in info['formats']:
-        if (
-                fmt.get('protocol') != 'https'
-                or (vcoding and not fmt.get('vcodec', 'none').startswith(vcoding))
-                or (vext and fmt.get('video_ext') != vext)
-                or not fmt.get('url')
-        ):
-            continue
-
-        if not best_format:
-            best_format = fmt
-            continue
-
-        if vext != 'none':
-            height = fmt.get('height') or 0
-            best_height = best_format.get('height') or 0
-
-            fps = fmt.get('fps') or 0
-            best_fps = best_format.get('fps') or 0
-
-            if (
-                    height > best_height
-                    or (height == best_height and fps > best_fps)
-            ):
-                best_format = fmt
-                continue
-
-        tbr = fmt.get('tbr') or 0
-        best_tbr = best_format.get('tbr') or 0
-
-        if (tbr > best_tbr):
-            best_format = fmt
-
-    if not best_format:
+    # Ensure URI
+    if not (url := info.get('url')):
         return None
 
     manifest = io.StringIO()
-    manifest.write(best_format['url'])
+    manifest.write(url)
 
-    return manifest
-
-def generate_manifest(info, opts):
-    for vcoding in opts['vcodings']:
-        if (manifest := _make_manifest(info, vcoding, None)):
-            return manifest.getvalue()
-
-    if (
-            (manifest := _make_manifest(info, None, 'mp4'))
-            or (manifest := _make_manifest(info, None, 'none')) # Audio only
-    ):
-        return manifest.getvalue()
-
-    return None
+    return manifest.getvalue()

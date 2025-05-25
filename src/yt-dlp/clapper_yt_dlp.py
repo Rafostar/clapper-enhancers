@@ -53,6 +53,7 @@ YTDL_OPTS = {
     'quiet': debug_level < Gst.DebugLevel.INFO,
     'color': 'never', # no color in exceptions
     'ignoreconfig': True,
+    'format': 'bestvideo[protocol*=m3u8]+bestaudio[protocol*=m3u8]/bestvideo[container*=dash]+bestaudio[container*=dash]/best',
     'extract_flat': 'in_playlist',
     'extractor_args': {
         'youtube': {
@@ -90,6 +91,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
 
         # Not used during init, so we can alter it here
         self._ytdl.params['noplaylist'] = True
+        self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
 
         try:
             info = self._ytdl.extract_info(uri.to_string(), download=False)
@@ -103,15 +105,11 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if debug_level >= Gst.DebugLevel.LOG:
             print(json.dumps(self._ytdl.sanitize_info(info), indent=4))
 
-        opts = {
-            'vcodings': list(map(str.strip, self.codecs_order.split(',')))
-        }
-
-        if (manifest := dash.generate_manifest(info, opts)):
-            media_type = 'application/dash+xml'
-        elif (manifest := hls.generate_manifest(info, opts)):
+        if (manifest := hls.generate_manifest(info)):
             media_type = 'application/x-hls'
-        elif (manifest := direct.generate_manifest(info, opts)):
+        elif (manifest := dash.generate_manifest(info)):
+            media_type = 'application/dash+xml'
+        elif (manifest := direct.generate_manifest(info)):
             media_type = 'text/uri-list'
         else:
             raise GLib.Error('Could not generate playable manifest')

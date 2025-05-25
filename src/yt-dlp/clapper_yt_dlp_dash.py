@@ -151,7 +151,7 @@ def _add_adaptation_set(period, info, vcoding, acoding, lang=None):
 
     return True
 
-def _add_audio_adaptation_sets(period, info, acodings):
+def _add_audio_adaptation_sets(period, info, acoding):
     success = False
     languages = []
 
@@ -176,66 +176,63 @@ def _add_audio_adaptation_sets(period, info, acodings):
     if default_lang:
         languages.insert(0, default_lang)
 
-    for acoding in acodings:
-        # Add an adaptiation set for each language
-        for lang in languages:
-            success |= _add_adaptation_set(period, info, 'none', acoding, lang)
+    # Add an adaptiation set for each language
+    for lang in languages:
+        success |= _add_adaptation_set(period, info, 'none', acoding, lang)
 
-        # Fallback for undetermined language
-        if not success:
-            success |= _add_adaptation_set(period, info, 'none', acoding)
-
-        # At least one language for acoding added
-        if success:
-            break
+    # Fallback for undetermined language
+    if not success:
+        success |= _add_adaptation_set(period, info, 'none', acoding)
 
     return success
 
-def generate_manifest(info, opts):
+def generate_manifest(info):
+    # Check if DASH is requested
+    is_dash = False
+    separate = False
+    if (req_formats := info.get('requested_formats')):
+        separate = (len(req_formats) > 1)
+        is_dash = ((val := req_formats[0].get('container')) and val.endswith('_dash'))
+    else:
+        is_dash = ((val := info.get('container')) and val.endswith('_dash'))
+
+    if not is_dash:
+        return None
+
+    vcoding = (info.get('vcodec') or 'none')[:4]
+    acoding = (info.get('acodec') or 'none')[:4]
+
+    if vcoding == acoding or (separate and 'none' in {vcoding, acoding}):
+        return None
+
+    # Duration is required in non-live manifest
+    if not (duration := int(info.get('duration') or 0)):
+        return None
+
+    ns_xsi = 'http://www.w3.org/2001/XMLSchema-instance'
+
+    ET.register_namespace('xsi', ns_xsi)
+    qname = ET.QName(ns_xsi, 'schemaLocation')
+
+    dur_pts = f'PT{duration}S'
+    buf_pts = f'PT{min(2, duration)}S'
+
+    mpd = ET.Element('MPD')
+    mpd.set(qname, 'urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd')
+    mpd.set('xmlns', 'urn:mpeg:dash:schema:mpd:2011')
+    mpd.set('type', 'static')
+    mpd.set('mediaPresentationDuration', dur_pts)
+    mpd.set('minBufferTime', buf_pts)
+    mpd.set('profiles', 'urn:mpeg:dash:profile:isoff-on-demand:2011')
+
+    period = ET.SubElement(mpd, 'Period')
     success = False
 
-    if (duration := int(info.get('duration') or 0)):
-        ns_xsi = 'http://www.w3.org/2001/XMLSchema-instance'
-
-        ET.register_namespace('xsi', ns_xsi)
-        qname = ET.QName(ns_xsi, 'schemaLocation')
-
-        dur_pts = f'PT{duration}S'
-        buf_pts = f'PT{min(2, duration)}S'
-
-        mpd = ET.Element('MPD')
-        mpd.set(qname, 'urn:mpeg:dash:schema:mpd:2011 DASH-MPD.xsd')
-        mpd.set('xmlns', 'urn:mpeg:dash:schema:mpd:2011')
-        mpd.set('type', 'static')
-        mpd.set('mediaPresentationDuration', dur_pts)
-        mpd.set('minBufferTime', buf_pts)
-        mpd.set('profiles', 'urn:mpeg:dash:profile:isoff-on-demand:2011')
-
-        period = ET.SubElement(mpd, 'Period')
-
-        acodings = [] # Possibilities depend on selected vcoding
-
-        for vcoding in opts['vcodings']:
-            if (success := _add_adaptation_set(period, info, vcoding, 'none')):
-                if vcoding in ['avc1', 'av01', 'hev1']:
-                    acodings += ['mp4a']
-                elif vcoding in ['vp09']:
-                    acodings += ['opus']
-
-                break
-
-        # No video, allow any supported audio for audio-only
-        if not success:
-            acodings = ['mp4a', 'opus']
-
-        success |= _add_audio_adaptation_sets(period, info, acodings)
-
-        # If separate failed, try combined
-        if not success:
-            for vcoding in opts['vcodings']:
-                for acoding in acodings:
-                    if (success := _add_adaptation_set(period, info, vcoding, acoding)):
-                        break
+    if separate:
+        success |= _add_adaptation_set(period, info, vcoding, 'none')
+        success |= _add_audio_adaptation_sets(period, info, acoding)
+    else:
+        success = _add_adaptation_set(period, info, vcoding, acoding)
 
     if not success:
         return None
