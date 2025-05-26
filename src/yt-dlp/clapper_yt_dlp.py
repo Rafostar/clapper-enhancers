@@ -75,8 +75,14 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
             default='avc1,av01,hev1,vp09',
             flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL)
         )
+        cookies_file = GObject.Property(type=str, nick='Cookies File',
+            blurb='Netscape formatted file to read and write cookies',
+            default='',
+            flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL | Clapper.EnhancerParamFlags.FILEPATH)
+        )
     else:
         codecs_order = 'avc1,av01,hev1,vp09'
+        cookies_file = ''
 
     _ytdl = None
 
@@ -97,6 +103,11 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         # Not used during init, so we can alter it here
         self._ytdl.params['noplaylist'] = True
         self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
+        if self.cookies_file:
+            if os.path.isfile(self.cookies_file):
+                self._ytdl.params['cookies'] = self.cookies_file
+            else:
+                raise GLib.Error('Specified cookies file does not exist')
 
         try:
             info = self._ytdl.extract_info(uri.to_string(), download=False)
