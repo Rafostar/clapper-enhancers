@@ -27,15 +27,18 @@ def _add_x_media(manifest, fmt):
     fmt_id = fmt['format_id'].split('-')[0]
     manifest.write(f',GROUP-ID="{fmt_id}"')
 
-    if (language := fmt.get('language')):
+    is_default = 'YES'
+
+    # NOTE: GStreamer expects variants of single language to have the same NAME
+    if ((language := fmt.get('language')) and language != 'none'):
         # Convert to ISO-639
         lang = language.split('-')[0]
         manifest.write(f',LANGUAGE="{lang}"')
+        manifest.write(f',NAME="{language}"')
+        is_default = 'YES' if (fmt.get('language_preference') or 0) > 0 else 'NO'
+    else:
+        manifest.write(f',NAME="Default"')
 
-    fmt_name = fmt.get('format_note', 'Default')
-    manifest.write(f',NAME="{fmt_name}"')
-
-    is_default = 'YES' if (fmt.get('language_preference') or 0) > 0 else 'NO'
     manifest.write(f',DEFAULT={is_default},AUTOSELECT=YES')
 
     url = fmt['url']
@@ -157,15 +160,20 @@ def _make_manifest(info, vcoding, acoding, separate=False):
 
     return manifest
 
-def generate_manifest(info, opts):
-    for vcoding in opts['vcodings']:
-        if (
-                (manifest := _make_manifest(info, vcoding, 'mp4a', True)) # Video + Audio separately
-                or (manifest := _make_manifest(info, vcoding, 'mp4a')) # Video + Audio combined
-        ):
-            return manifest.getvalue()
+def generate_manifest(info):
+    # Check if HLS is requested
+    if not ((protocol := info.get('protocol')) and protocol.startswith('m3u8_native')):
+        return None
 
-    if (manifest := _make_manifest(info, 'none', 'mp4a')): # Audio only
+    separate = (len(protocol.split('+')) > 1)
+    vcoding = (info.get('vcodec') or 'none')[:4]
+    acoding = (info.get('acodec') or 'none')[:4]
+
+    if vcoding == acoding or (separate and 'none' in {vcoding, acoding}):
+        return None
+
+    # Video + Audio separately if more than 1 format, otherwise combined
+    if (manifest := _make_manifest(info, vcoding, acoding, separate)):
         return manifest.getvalue()
 
     return None

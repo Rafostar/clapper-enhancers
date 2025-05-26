@@ -16,13 +16,24 @@
 # Free Software Foundation, Inc., 51 Franklin St, Fifth Floor,
 # Boston, MA 02110-1301, USA.
 
-import gi
+import os, fnmatch, gi
 gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('Gst', '1.0')
 gi.require_version('Clapper', '0.0')
 from gi.repository import GLib, GObject, Gio, Gst, Clapper
+
+debug_level = Gst.DebugLevel.NONE
+for entry in os.getenv('GST_DEBUG', '').split(','):
+    if ':' in entry:
+        pattern, level = entry.rsplit(':', 1)
+        if fnmatch.fnmatch('clapperytdlp', pattern):
+            try: debug_level = int(level)
+            except ValueError: continue
+
+if debug_level >= Gst.DebugLevel.LOG:
+    import json
 
 try:
     from yt_dlp import YoutubeDL
@@ -38,9 +49,11 @@ import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
 
 YTDL_OPTS = {
-    'quiet': True,
+    'verbose': debug_level >= Gst.DebugLevel.DEBUG,
+    'quiet': debug_level < Gst.DebugLevel.INFO,
     'color': 'never', # no color in exceptions
     'ignoreconfig': True,
+    'format': 'bestvideo[protocol*=m3u8]+bestaudio[protocol*=m3u8]/bestvideo[container*=dash]+bestaudio[container*=dash]/best',
     'extract_flat': 'in_playlist',
     'extractor_args': {
         'youtube': {
@@ -78,6 +91,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
 
         # Not used during init, so we can alter it here
         self._ytdl.params['noplaylist'] = True
+        self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
 
         try:
             info = self._ytdl.extract_info(uri.to_string(), download=False)
@@ -88,15 +102,14 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if cancellable.is_cancelled():
             return False
 
-        opts = {
-            'vcodings': list(map(str.strip, self.codecs_order.split(',')))
-        }
+        if debug_level >= Gst.DebugLevel.LOG:
+            print(json.dumps(self._ytdl.sanitize_info(info), indent=4))
 
-        if (manifest := dash.generate_manifest(info, opts)):
-            media_type = 'application/dash+xml'
-        elif (manifest := hls.generate_manifest(info, opts)):
+        if (manifest := hls.generate_manifest(info)):
             media_type = 'application/x-hls'
-        elif (manifest := direct.generate_manifest(info, opts)):
+        elif (manifest := dash.generate_manifest(info)):
+            media_type = 'application/dash+xml'
+        elif (manifest := direct.generate_manifest(info)):
             media_type = 'text/uri-list'
         else:
             raise GLib.Error('Could not generate playable manifest')
