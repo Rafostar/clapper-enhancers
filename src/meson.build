@@ -1,6 +1,7 @@
 # Enhancers
 clapper_possible_enhancers = [
   'lbry',
+  'mpris',
   'peertube',
   'yt-dlp',
 ]
@@ -49,12 +50,14 @@ foreach name : clapper_possible_enhancers
       endif
     endforeach
 
+    enhancer_available = false
     if can_build
       if enhancer_data.length() > 0
         install_data(
           enhancer_data,
           install_dir: enhancer_install_dir,
         )
+        enhancer_available = true
       endif
       if enhancer_sources.length() > 0
         library(
@@ -66,21 +69,24 @@ foreach name : clapper_possible_enhancers
           install: true,
           install_dir: enhancer_install_dir,
         )
+        enhancer_available = true
       endif
-      if enhancer_plugin_template != ''
-        plugin_conf = configuration_data()
-        plugin_conf.set('VERSION', meson.project_version())
-        configure_file(
-          input: join_paths(name, enhancer_plugin_template),
-          output: enhancer_plugin_template.replace('.in', ''),
-          configuration: plugin_conf,
-          install: true,
-          install_dir: enhancer_install_dir,
-        )
-      endif
-      clapper_available_enhancers += name
-      if enhancer_configurable
-        clapper_configurable_enhancers += name
+      if enhancer_available
+        if enhancer_plugin_template != ''
+          plugin_conf = configuration_data()
+          plugin_conf.set('VERSION', meson.project_version())
+          configure_file(
+            input: join_paths(name, enhancer_plugin_template),
+            output: enhancer_plugin_template.replace('.in', ''),
+            configuration: plugin_conf,
+            install: true,
+            install_dir: enhancer_install_dir,
+          )
+        endif
+        clapper_available_enhancers += name
+        if enhancer_configurable
+          clapper_configurable_enhancers += name
+        endif
       endif
     endif
   endif

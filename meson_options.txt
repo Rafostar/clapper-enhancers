@@ -11,6 +11,11 @@ option('lbry',
   value: 'auto',
   description: 'Clapper Enhancer LBRY'
 )
+option('mpris',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer MPRIS'
+)
 option('peertube',
   type: 'feature',
   value: 'auto',
