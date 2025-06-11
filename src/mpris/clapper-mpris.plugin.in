@@ -1,0 +1,5 @@
+[Plugin]
+Module=clapper-mpris
+Name=MPRIS
+Description=MPRIS support
+Version=@VERSION@
