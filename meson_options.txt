@@ -21,6 +21,11 @@ option('peertube',
   value: 'auto',
   description: 'Clapper Enhancer PeerTube'
 )
+option('recall',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer Recall'
+)
 option('yt-dlp',
   type: 'feature',
   value: 'auto',

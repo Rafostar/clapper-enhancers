@@ -14,6 +14,8 @@ version_array = enhancers_version.split('.')
 glib_req = '>= 2.76.0'
 clapper_req = '>= @0@.@1@'.format(version_array[0], version_array[1])
 
+clapper_api_name = 'clapper-@0@.0'.format(version_array[0])
+
 optimization = get_option('optimization')
 build_optimized = optimization in ['2', '3', 's']
 
