@@ -1,0 +1,5 @@
+[Plugin]
+Module=clapper-recall
+Name=Recall
+Description=Recalls last playback position
+Version=@VERSION@
