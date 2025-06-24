@@ -3,6 +3,7 @@ clapper_possible_enhancers = [
   'lbry',
   'mpris',
   'peertube',
+  'recall',
   'yt-dlp',
 ]
 
