@@ -55,12 +55,96 @@
 
 #define DEFAULT_QUEUE_CONTROLLABLE FALSE
 
+/* Compat */
+/* FIXME: 1.0: Remove and rename back to ClapperMpris in meson */
+#define clapper_enhancer_debug   clapper_enhancer_mpris_debug
+#define clapper_mpris_get_type   clapper_enhancer_mpris_get_type
+#define clapper_mpris_class_init clapper_enhancer_mpris_class_init
+#define clapper_mpris_init       clapper_enhancer_mpris_init
+
+#define clapper_mpris_set_queue_controllable clapper_enhancer_mpris_set_queue_controllable
+#define clapper_mpris_set_fallback_art_url   clapper_enhancer_mpris_set_fallback_art_url
+
+#define clapper_mpris_media_player2_set_identity                 clapper_enhancer_mpris_media_player2_set_identity
+#define clapper_mpris_media_player2_set_desktop_entry            clapper_enhancer_mpris_media_player2_set_desktop_entry
+#define clapper_mpris_media_player2_set_supported_mime_types     clapper_enhancer_mpris_media_player2_set_supported_mime_types
+#define clapper_mpris_media_player2_set_supported_uri_schemes    clapper_enhancer_mpris_media_player2_set_supported_uri_schemes
+#define clapper_mpris_media_player2_set_has_track_list           clapper_enhancer_mpris_media_player2_set_has_track_list
+
+#define clapper_mpris_media_player2_player_set_can_play          clapper_enhancer_mpris_media_player2_player_set_can_play
+#define clapper_mpris_media_player2_player_set_can_pause         clapper_enhancer_mpris_media_player2_player_set_can_pause
+#define clapper_mpris_media_player2_player_set_can_seek          clapper_enhancer_mpris_media_player2_player_set_can_seek
+#define clapper_mpris_media_player2_player_set_can_control       clapper_enhancer_mpris_media_player2_player_set_can_control
+#define clapper_mpris_media_player2_player_set_can_go_previous   clapper_enhancer_mpris_media_player2_player_set_can_go_previous
+#define clapper_mpris_media_player2_player_set_can_go_next       clapper_enhancer_mpris_media_player2_player_set_can_go_next
+#define clapper_mpris_media_player2_player_set_playback_status   clapper_enhancer_mpris_media_player2_player_set_playback_status
+#define clapper_mpris_media_player2_player_set_position          clapper_enhancer_mpris_media_player2_player_set_position
+#define clapper_mpris_media_player2_player_set_metadata          clapper_enhancer_mpris_media_player2_player_set_metadata
+#define clapper_mpris_media_player2_player_set_minimum_rate      clapper_enhancer_mpris_media_player2_player_set_minimum_rate
+#define clapper_mpris_media_player2_player_set_maximum_rate      clapper_enhancer_mpris_media_player2_player_set_maximum_rate
+
+#define clapper_mpris_media_player2_player_set_volume            clapper_enhancer_mpris_media_player2_player_set_volume
+#define clapper_mpris_media_player2_player_get_volume            clapper_enhancer_mpris_media_player2_player_get_volume
+
+#define clapper_mpris_media_player2_player_set_rate              clapper_enhancer_mpris_media_player2_player_set_rate
+#define clapper_mpris_media_player2_player_get_rate              clapper_enhancer_mpris_media_player2_player_get_rate
+
+#define clapper_mpris_media_player2_player_set_loop_status       clapper_enhancer_mpris_media_player2_player_set_loop_status
+#define clapper_mpris_media_player2_player_get_loop_status       clapper_enhancer_mpris_media_player2_player_get_loop_status
+
+#define clapper_mpris_media_player2_player_set_shuffle           clapper_enhancer_mpris_media_player2_player_set_shuffle
+#define clapper_mpris_media_player2_player_get_shuffle           clapper_enhancer_mpris_media_player2_player_get_shuffle
+
+#define clapper_mpris_media_player2_player_complete_play_pause   clapper_enhancer_mpris_media_player2_player_complete_play_pause
+#define clapper_mpris_media_player2_player_complete_play         clapper_enhancer_mpris_media_player2_player_complete_play
+#define clapper_mpris_media_player2_player_complete_pause        clapper_enhancer_mpris_media_player2_player_complete_pause
+#define clapper_mpris_media_player2_player_complete_stop         clapper_enhancer_mpris_media_player2_player_complete_stop
+#define clapper_mpris_media_player2_player_complete_seek         clapper_enhancer_mpris_media_player2_player_complete_seek
+#define clapper_mpris_media_player2_player_complete_set_position clapper_enhancer_mpris_media_player2_player_complete_set_position
+#define clapper_mpris_media_player2_player_complete_previous     clapper_enhancer_mpris_media_player2_player_complete_previous
+#define clapper_mpris_media_player2_player_complete_next         clapper_enhancer_mpris_media_player2_player_complete_next
+#define clapper_mpris_media_player2_player_complete_open_uri     clapper_enhancer_mpris_media_player2_player_complete_open_uri
+
+#define clapper_mpris_media_player2_track_list_emit_track_added             clapper_enhancer_mpris_media_player2_track_list_emit_track_added
+#define clapper_mpris_media_player2_track_list_emit_track_removed           clapper_enhancer_mpris_media_player2_track_list_emit_track_removed
+#define clapper_mpris_media_player2_track_list_emit_track_list_replaced     clapper_enhancer_mpris_media_player2_track_list_emit_track_list_replaced
+#define clapper_mpris_media_player2_track_list_emit_track_metadata_changed  clapper_enhancer_mpris_media_player2_track_list_emit_track_metadata_changed
+
+#define clapper_mpris_media_player2_track_list_complete_get_tracks_metadata clapper_enhancer_mpris_media_player2_track_list_complete_get_tracks_metadata
+#define clapper_mpris_media_player2_track_list_complete_go_to               clapper_enhancer_mpris_media_player2_track_list_complete_go_to
+#define clapper_mpris_media_player2_track_list_complete_add_track           clapper_enhancer_mpris_media_player2_track_list_complete_add_track
+#define clapper_mpris_media_player2_track_list_complete_remove_track        clapper_enhancer_mpris_media_player2_track_list_complete_remove_track
+
+#define clapper_mpris_media_player2_track_list_set_tracks                   clapper_enhancer_mpris_media_player2_track_list_set_tracks
+#define clapper_mpris_media_player2_track_list_set_can_edit_tracks          clapper_enhancer_mpris_media_player2_track_list_set_can_edit_tracks
+
+#define clapper_mpris_media_player2_skeleton_new            clapper_enhancer_mpris_media_player2_skeleton_new
+#define clapper_mpris_media_player2_player_skeleton_new     clapper_enhancer_mpris_media_player2_player_skeleton_new
+#define clapper_mpris_media_player2_track_list_skeleton_new clapper_enhancer_mpris_media_player2_track_list_skeleton_new
+
+#define ClapperMprisMediaPlayer2          ClapperEnhancerMprisMediaPlayer2
+#define ClapperMprisMediaPlayer2Player    ClapperEnhancerMprisMediaPlayer2Player
+#define ClapperMprisMediaPlayer2TrackList ClapperEnhancerMprisMediaPlayer2TrackList
+/* Compat End */
+
 #define GST_CAT_DEFAULT clapper_mpris_debug
 GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 
-#define CLAPPER_TYPE_MPRIS (clapper_mpris_get_type())
+/* FIXME: 1.0: Uncomment (rename back to ClapperMpris) */
+//#define CLAPPER_TYPE_MPRIS (clapper_mpris_get_type())
+//#define CLAPPER_MPRIS_CAST(obj) ((ClapperMpris *)(obj))
+//G_DECLARE_FINAL_TYPE (ClapperMpris, clapper_mpris, CLAPPER, MPRIS, GstObject);
+
+/* Compat */
+/* FIXME: 1.0: Remove */
+#ifndef CLAPPER_MPRIS_CAST // defined in feature header
 #define CLAPPER_MPRIS_CAST(obj) ((ClapperMpris *)(obj))
-G_DECLARE_FINAL_TYPE (ClapperMpris, clapper_mpris, CLAPPER, MPRIS, GstObject);
+#endif
+G_DECLARE_FINAL_TYPE (ClapperEnhancerMpris, clapper_enhancer_mpris, CLAPPER, ENHANCER_MPRIS, GstObject);
+#define _ClapperMpris _ClapperEnhancerMpris
+#define ClapperMpris ClapperEnhancerMpris
+#define ClapperMprisClass ClapperEnhancerMprisClass
+/* Compat End */
 
 G_MODULE_EXPORT void peas_register_types (PeasObjectModule *module);
 
@@ -554,9 +638,12 @@ clapper_mpris_reactable_iface_init (ClapperReactableInterface *iface)
   iface->queue_progression_changed = clapper_mpris_queue_progression_changed;
 }
 
-#define parent_class clapper_mpris_parent_class
-G_DEFINE_TYPE_WITH_CODE (ClapperMpris, clapper_mpris, GST_TYPE_OBJECT,
+/* Compat */
+/* FIXME: 1.0: Rename back to ClapperMpris */
+#define parent_class clapper_enhancer_mpris_parent_class
+G_DEFINE_TYPE_WITH_CODE (ClapperEnhancerMpris, clapper_enhancer_mpris, GST_TYPE_OBJECT,
     G_IMPLEMENT_INTERFACE (CLAPPER_TYPE_REACTABLE, clapper_mpris_reactable_iface_init));
+/* Compat End */
 
 static gchar **
 _filter_names (const gchar *const *all_names)

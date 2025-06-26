@@ -15,14 +15,6 @@ if not clapper_dep.found() or not clapper_dep.version().version_compare('>= 0.9.
   subdir_done()
 endif
 
-clapper_features = clapper_dep.get_variable('features').split()
-if clapper_features.contains('mpris')
-  if enhancer_option.enabled()
-    error('Cannot build @0@ enhancer when Clapper is compiled with deprecated @0@ feature'.format(name))
-  endif
-  subdir_done()
-endif
-
 gdbus_codegen = find_program('gdbus-codegen', required: false)
 if not gdbus_codegen.found()
   if enhancer_option.enabled()
@@ -36,7 +28,7 @@ gnome = import('gnome')
 clapper_mpris_gdbus = gnome.gdbus_codegen('clapper-mpris-gdbus',
   sources: 'clapper-mpris-gdbus.xml',
   interface_prefix: 'org.mpris.',
-  namespace: 'ClapperMpris',
+  namespace: 'ClapperEnhancerMpris', # FIXME: 1.0: Rename to ClapperMpris
 )
 
 enhancer_plugin_template = 'clapper-mpris.plugin.in'
