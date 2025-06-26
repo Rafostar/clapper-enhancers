@@ -136,8 +136,11 @@ GST_DEBUG_CATEGORY_STATIC (GST_CAT_DEFAULT);
 //G_DECLARE_FINAL_TYPE (ClapperMpris, clapper_mpris, CLAPPER, MPRIS, GstObject);
 
 /* Compat */
-/* FIXME: 1.0: Remove */
-#ifndef CLAPPER_MPRIS_CAST // defined in feature header
+/* FIXME: 1.0: Remove (these are defined in feature header) */
+#ifndef CLAPPER_TYPE_MPRIS
+#define CLAPPER_TYPE_MPRIS (clapper_mpris_get_type())
+#endif
+#ifndef CLAPPER_MPRIS_CAST
 #define CLAPPER_MPRIS_CAST(obj) ((ClapperMpris *)(obj))
 #endif
 G_DECLARE_FINAL_TYPE (ClapperEnhancerMpris, clapper_enhancer_mpris, CLAPPER, ENHANCER_MPRIS, GstObject);
