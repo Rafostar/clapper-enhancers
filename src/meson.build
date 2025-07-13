@@ -2,6 +2,7 @@
 clapper_possible_enhancers = [
   'lbry',
   'mpris',
+  'parser-m3u',
   'peertube',
   'recall',
   'yt-dlp',

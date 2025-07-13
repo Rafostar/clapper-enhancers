@@ -16,6 +16,11 @@ option('mpris',
   value: 'auto',
   description: 'Clapper Enhancer MPRIS'
 )
+option('parser-m3u',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer Parser M3U'
+)
 option('peertube',
   type: 'feature',
   value: 'auto',
