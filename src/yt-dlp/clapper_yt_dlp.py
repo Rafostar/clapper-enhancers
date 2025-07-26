@@ -15,7 +15,7 @@
 # License along with this library; if not, see
 # <https://www.gnu.org/licenses/>.
 
-import os, fnmatch, gi
+import os, fnmatch, json, gi
 gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
@@ -31,9 +31,6 @@ for entry in os.getenv('GST_DEBUG', '').split(','):
             try: debug_level = int(level)
             except ValueError: continue
 
-if debug_level >= Gst.DebugLevel.LOG:
-    import json
-
 try:
     from yt_dlp import YoutubeDL
 except ImportError:
@@ -46,6 +43,7 @@ if YoutubeDL:
 import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
+import clapper_yt_dlp_playlist as playlist
 
 YTDL_OPTS = {
     'verbose': debug_level >= Gst.DebugLevel.DEBUG,
@@ -54,20 +52,26 @@ YTDL_OPTS = {
     'ignoreconfig': True,
     'format': 'bestvideo[protocol*=m3u8]+bestaudio[protocol*=m3u8]/bestvideo[container*=dash]+bestaudio[container*=dash]/best',
     'extract_flat': 'in_playlist',
+    'noplaylist': True,
     'extractor_args': {
         'youtube': {
             'skip': ['translated_subs'],
             'player_client': ['ios']
+        },
+        'youtubetab': {
+            'skip': ['webpage']
         }
     }
 }
 
 EXPIRATIONS = {
     'youtube': 900, # 15 minutes
+    'youtube:search_url': 300, # 5 minutes
+    'youtube:tab': 600, # 10 minutes (playlist/channel)
     'default': 180 # 3 minutes
 }
 
-class ClapperYtDlp(GObject.Object, Clapper.Extractable):
+class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
     if Clapper.MINOR_VERSION >= 9:
         codecs_order = GObject.Property(type=str, nick='Codecs Order',
             blurb='Comma-separated order of preferred video codecs',
@@ -100,13 +104,19 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
             raise GLib.Error('Could not import "yt-dlp". Please check your installation.')
 
         # Not used during init, so we can alter it here
-        self._ytdl.params['noplaylist'] = True
         self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
         if self.cookies_file:
             if os.path.isfile(self.cookies_file):
                 self._ytdl.params['cookies'] = self.cookies_file
             else:
                 raise GLib.Error('Specified cookies file does not exist')
+
+        # FIXME: Can this be improved somehow (considering other websites)?
+        # Limit extraction to first 50 items if not a playlist
+        if not uri.get_path().startswith('/playlist'):
+            self._ytdl.params['playlist_items'] = '0:50'
+            if debug_level >= Gst.DebugLevel.DEBUG:
+                print('[clapper_yt_dlp] Extraction range limited to first 50 items')
 
         try:
             info = self._ytdl.extract_info(uri.to_string(), download=False)
@@ -120,12 +130,17 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if debug_level >= Gst.DebugLevel.LOG:
             print(json.dumps(self._ytdl.sanitize_info(info), indent=4))
 
+        is_playlist = False
+
         if (manifest := hls.generate_manifest(info)):
             media_type = 'application/x-hls'
         elif (manifest := dash.generate_manifest(info)):
             media_type = 'application/dash+xml'
         elif (manifest := direct.generate_manifest(info)):
-            media_type = 'text/uri-list'
+            media_type = 'text/x-uri'
+        elif (manifest := playlist.generate_manifest(info)):
+            media_type = 'application/clapper-playlist'
+            is_playlist = True
         else:
             raise GLib.Error('Could not generate playable manifest')
 
@@ -133,27 +148,62 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable):
         if cancellable.is_cancelled():
             return False
 
+        extractor_name = info.get('extractor')
+        if debug_level >= Gst.DebugLevel.DEBUG:
+            print(f'[clapper_yt_dlp] Used extractor: "{extractor_name}"')
+
         harvest.fill_with_text(media_type, manifest)
 
-        if (val := info.get('title')):
-            harvest.tags_add(Gst.TAG_TITLE, val)
-        if (val := info.get('duration')):
-            value = GObject.Value()
-            value.init(GObject.TYPE_UINT64)
-            value.set_uint64(val * Gst.SECOND)
-            harvest.tags_add(Gst.TAG_DURATION, value)
-        if (val := info.get('chapters')):
-            for index, chap in enumerate(val):
-                title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
-                harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
+        if not is_playlist:
+            if (val := info.get('title')):
+                harvest.tags_add(Gst.TAG_TITLE, val)
+            if (val := info.get('duration')):
+                value = GObject.Value()
+                value.init(GObject.TYPE_UINT64)
+                value.set_uint64(val * Gst.SECOND)
+                harvest.tags_add(Gst.TAG_DURATION, value)
+            if (val := info.get('chapters')):
+                for index, chap in enumerate(val):
+                    title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
+                    harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
 
-        # XXX: We just take headers from any format here, do we need to find/combine some?
-        for fmt in info['formats']:
-            if (hdrs := fmt.get('http_headers')):
-                [harvest.headers_set(key, val) for key, val in hdrs.items()]
-                break
+            # XXX: We just take headers from any format here, do we need to find/combine some?
+            for fmt in info['formats']:
+                if (hdrs := fmt.get('http_headers')):
+                    [harvest.headers_set(key, val) for key, val in hdrs.items()]
+                    break
 
         if Clapper.MINOR_VERSION >= 9 and not info.get('is_live'):
-            harvest.set_expiration_seconds(EXPIRATIONS.get(info.get('extractor'), EXPIRATIONS['default']))
+            harvest.set_expiration_seconds(EXPIRATIONS.get(extractor_name, EXPIRATIONS['default']))
+
+        return True
+
+    def do_parse(self, uri: GLib.Uri, gbytes: GLib.Bytes, plist: Gio.ListStore, cancellable: Gio.Cancellable):
+        info = json.loads(gbytes.get_data())
+
+        for entry in info['entries']:
+            if cancellable.is_cancelled():
+                return False
+
+            if (
+                    not ((val := entry.get('_type')) and val == 'url')
+                    or not entry.get('url')
+            ):
+                continue
+
+            item = Clapper.MediaItem(uri=entry['url'])
+            tags = Gst.TagList.new_empty()
+            tags.set_scope(Gst.TagScope.GLOBAL)
+
+            if (val := entry.get('title')):
+                tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_TITLE, val)
+            if (val := entry.get('duration')):
+                value = GObject.Value()
+                value.init(GObject.TYPE_UINT64)
+                value.set_uint64(val * Gst.SECOND)
+                tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_DURATION, value)
+
+            item.populate_tags(tags)
+            plist.append(item)
 
         return True
