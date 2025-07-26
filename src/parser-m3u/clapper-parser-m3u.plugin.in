@@ -1,0 +1,7 @@
+[Plugin]
+Module=clapper-parser-m3u
+Name=Parser M3U
+Description=M3U playlists support
+Version=@VERSION@
+X-Data-Prefix=#EXTM3U
+X-Data-Contains=#EXTINF:
