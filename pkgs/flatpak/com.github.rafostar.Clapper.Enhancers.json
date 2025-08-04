@@ -1,0 +1,45 @@
+{
+    "id": "com.github.rafostar.Clapper.Enhancers",
+    "branch": "master",
+    "runtime": "com.github.rafostar.Clapper",
+    "runtime-version": "master",
+    "sdk": "org.gnome.Sdk",
+    "build-extension": true,
+    "separate-locales": false,
+    "build-options": {
+        "prefix": "/app/extensions/clapper/enhancers",
+        "prepend-path": "/app/extensions/clapper/enhancers/bin",
+        "prepend-ld-library-path": "/app/extensions/clapper/enhancers/lib",
+        "prepend-pkg-config-path": "/app/extensions/clapper/enhancers/lib/pkgconfig"
+    },
+    "modules": [
+        "flathub/lib/python-modules.json",
+        {
+            "name": "clapper-enhancers",
+            "buildsystem": "meson",
+            "build-options": {
+                "env": {
+                    "ENHANCERS_DIR": "/app/extensions/clapper/enhancers"
+                }
+            },
+            "config-opts": [
+                "-Denhancersdir=/app/extensions/clapper/enhancers/plugins",
+                "-Dauto_features=enabled"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": "../../."
+                },
+                {
+                    "type": "file",
+                    "path": "flathub/com.github.rafostar.Clapper.Enhancers.metainfo.xml"
+                }
+            ],
+            "post-install": [
+                "install -Dm644 -t ${ENHANCERS_DIR}/share/metainfo ../flathub/${FLATPAK_ID}.Enhancers.metainfo.xml",
+                "appstreamcli compose --components=${FLATPAK_ID}.Enhancers --prefix=/ --origin=${FLATPAK_ID}.Enhancers --result-root=${ENHANCERS_DIR} --data-dir=${ENHANCERS_DIR}/share/app-info/xmls ${ENHANCERS_DIR}"
+            ]
+        }
+    ]
+}

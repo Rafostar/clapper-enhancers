@@ -1,0 +1,64 @@
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+name: "Flatpak Extension"
+jobs:
+  flatpak:
+    name: "Flatpak Extension"
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+        include:
+        - os: ubuntu-24.04
+          arch: x86_64
+        - os: ubuntu-24.04-arm
+          arch: aarch64
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    container:
+      image: registry.fedoraproject.org/fedora
+      options: --privileged
+    steps:
+    - name: Prepare
+      run: |
+        dnf install -y git git-lfs dbus-daemon flatpak flatpak-builder libappstream-glib ccache zstd xorg-x11-server-Xvfb
+        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+        flatpak --system install -y --noninteractive flathub org.flatpak.Builder
+    - name: Download Clapper Artifact
+      uses: dawidd6/action-download-artifact@v11
+      with:
+        github_token: ${{secrets.GITHUB_TOKEN}}
+        workflow: flatpak.yml
+        workflow_conclusion: success
+        branch: master
+        ref: master
+        event: push
+        name: clapper-flatpak-${{ matrix.arch }}
+        repo: Rafostar/clapper
+        if_no_artifact_found: fail
+    - name: Install Clapper Artifact
+      run: |
+        flatpak --system install -y --noninteractive com.github.rafostar.Clapper.flatpak
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: Build
+      uses: flatpak/flatpak-github-actions/flatpak-builder@master
+      with:
+        bundle: com.github.rafostar.Clapper.Enhancers.flatpak
+        manifest-path: pkgs/flatpak/com.github.rafostar.Clapper.Enhancers.json
+        cache-key: flatpak-builder-${{ github.sha }}
+        arch: ${{ matrix.arch }}
+        upload-artifact: false
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        name: clapper-enhancers-flatpak-${{ matrix.arch }}
+        path: com.github.rafostar.Clapper.Enhancers.flatpak
+        if-no-files-found: error
