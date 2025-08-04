@@ -1,0 +1,3 @@
+[submodule "pkgs/flatpak/flathub"]
+	path = pkgs/flatpak/flathub
+	url = https://github.com/flathub/com.github.rafostar.Clapper.git

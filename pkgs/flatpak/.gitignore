@@ -1,0 +1,5 @@
+build/
+builddir/
+repo/
+.flatpak-builder/
+com.github.rafostar.Clapper.Enhancers.flatpak
