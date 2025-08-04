@@ -45,12 +45,22 @@ import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
 import clapper_yt_dlp_playlist as playlist
 
+# NOTE: GStreamer does not support mp3 and opus in HLS yet
+FORMAT_PREFERENCE = '/'.join([
+    'bestvideo[protocol*=m3u8]+bestaudio[protocol*=m3u8][ext!=mp3][ext!=opus]',
+    'bestvideo[container*=dash]+bestaudio[container*=dash]',
+    'bestaudio[protocol*=m3u8][ext!=mp3][ext!=opus]',
+    'bestaudio[container*=dash]',
+    'best[protocol*=http]',
+    'best'
+])
+
 YTDL_OPTS = {
     'verbose': debug_level >= Gst.DebugLevel.DEBUG,
     'quiet': debug_level < Gst.DebugLevel.INFO,
     'color': 'never', # no color in exceptions
     'ignoreconfig': True,
-    'format': 'bestvideo[protocol*=m3u8]+bestaudio[protocol*=m3u8]/bestvideo[container*=dash]+bestaudio[container*=dash]/best',
+    'format': FORMAT_PREFERENCE,
     'extract_flat': 'in_playlist',
     'noplaylist': True,
     'extractor_args': {
