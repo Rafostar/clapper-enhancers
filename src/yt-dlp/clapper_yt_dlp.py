@@ -185,8 +185,9 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             if cancellable.is_cancelled():
                 return False
 
+            # Type is usually "url" or "url_transparent"
             if (
-                    not ((val := entry.get('_type')) and val == 'url')
+                    not ((val := entry.get('_type')) and val.startswith('url'))
                     or not entry.get('url')
             ):
                 continue
