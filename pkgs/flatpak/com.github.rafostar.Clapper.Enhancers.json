@@ -37,8 +37,8 @@
                 }
             ],
             "post-install": [
-                "install -Dm644 -t ${ENHANCERS_DIR}/share/metainfo ../flathub/${FLATPAK_ID}.Enhancers.metainfo.xml",
-                "appstreamcli compose --components=${FLATPAK_ID}.Enhancers --prefix=/ --origin=${FLATPAK_ID}.Enhancers --result-root=${ENHANCERS_DIR} --data-dir=${ENHANCERS_DIR}/share/app-info/xmls ${ENHANCERS_DIR}"
+                "install -Dm644 -t ${ENHANCERS_DIR}/share/metainfo ../pkgs/flatpak/flathub/${FLATPAK_ID}.metainfo.xml",
+                "appstreamcli compose --components=${FLATPAK_ID} --prefix=/ --origin=${FLATPAK_ID} --result-root=${ENHANCERS_DIR} --data-dir=${ENHANCERS_DIR}/share/app-info/xmls ${ENHANCERS_DIR}"
             ]
         }
     ]
