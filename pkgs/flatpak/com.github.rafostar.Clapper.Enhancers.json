@@ -3,7 +3,7 @@
     "branch": "master",
     "runtime": "com.github.rafostar.Clapper",
     "runtime-version": "master",
-    "sdk": "org.gnome.Sdk",
+    "sdk": "org.gnome.Sdk//47",
     "build-extension": true,
     "separate-locales": false,
     "build-options": {
