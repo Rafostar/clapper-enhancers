@@ -96,7 +96,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             self._ytdl.add_info_extractor(ClapperYoutubeIE())
 
             for ie in gen_extractor_classes():
-                if ie.ie_key() not in BLACKLIST:
+                if ie._ENABLED and ie.ie_key() not in BLACKLIST:
                     self._ytdl.add_info_extractor(ie)
 
     def do_extract(self, uri: GLib.Uri, harvest: Clapper.Harvest, cancellable: Gio.Cancellable):
