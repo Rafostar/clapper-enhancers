@@ -36,7 +36,6 @@ jobs:
         workflow: flatpak.yml
         workflow_conclusion: success
         branch: master
-        ref: master
         event: push
         name: clapper-flatpak-${{ matrix.arch }}
         repo: Rafostar/clapper
