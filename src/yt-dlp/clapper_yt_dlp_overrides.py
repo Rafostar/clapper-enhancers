@@ -21,8 +21,7 @@ from yt_dlp.extractor.youtube import YoutubeIE
 from yt_dlp.utils import parse_m3u8_attributes
 
 BLACKLIST = [
-    'Youtube',
-    'Generic'
+    'Youtube'
 ]
 
 class ClapperYoutubeIE(YoutubeIE):
