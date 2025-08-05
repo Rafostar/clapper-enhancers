@@ -19,7 +19,7 @@ import io
 
 def generate_manifest(info):
     # Check if direct stream is requested
-    if not ((val := info.get('protocol')) and val == 'https'):
+    if not ((val := info.get('protocol')) and (val == 'https' or val == 'http')):
         return None
 
     # Ensure URI
