@@ -128,8 +128,14 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             if debug_level >= Gst.DebugLevel.DEBUG:
                 print('[clapper_yt_dlp] Extraction range limited to first 50 items')
 
+        uri_str = uri.to_string()
+
+        # Replace custom "ytdlp" scheme with "https"
+        if uri_str.startswith("ytdlp://"):
+            uri_str = "https" + uri_str[5:]
+
         try:
-            info = self._ytdl.extract_info(uri.to_string(), download=False)
+            info = self._ytdl.extract_info(uri_str, download=False)
         except Exception as e:
             raise GLib.Error(str(e))
 
