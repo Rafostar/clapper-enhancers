@@ -90,35 +90,25 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
         codecs_order = 'avc1,av01,hev1,vp09'
         cookies_file = ''
 
-    _ytdl = None
-
-    def __init__(self):
-        if YoutubeDL:
-            self._ytdl = YoutubeDL(YTDL_OPTS, auto_init=False)
-
-            self._ytdl.add_info_extractor(ClapperYoutubeIE())
-
-            for ie in gen_extractor_classes():
-                if ie._ENABLED and ie.ie_key() not in BLACKLIST:
-                    self._ytdl.add_info_extractor(ie)
-
     def do_extract(self, uri: GLib.Uri, harvest: Clapper.Harvest, cancellable: Gio.Cancellable):
         if not YoutubeDL:
             raise GLib.Error('Could not import "yt-dlp". Please check your installation.')
 
-        # Not used during init, so we can alter it here
-        self._ytdl.params['logger'] = debug.ClapperYtDlpLogger(cancellable)
-        self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
+        # Writable options copy to apply user set properties
+        opts = YTDL_OPTS.copy()
+
+        opts['logger'] = debug.ClapperYtDlpLogger(cancellable)
+        opts['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
         if self.cookies_file:
             if os.path.isfile(self.cookies_file):
-                self._ytdl.params['cookies'] = self.cookies_file
+                opts['cookies'] = self.cookies_file
             else:
                 raise GLib.Error('Specified cookies file does not exist')
 
         # FIXME: Can this be improved somehow (considering other websites)?
         # Limit extraction to first 50 items if not a playlist
         if not uri.get_path().startswith('/playlist'):
-            self._ytdl.params['playlist_items'] = '0:50'
+            opts['playlist_items'] = '0:50'
             debug.print_leveled(Gst.DebugLevel.DEBUG, 'Extraction range limited to first 50 items')
 
         uri_str = uri.to_string()
@@ -127,8 +117,14 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
         if uri_str.startswith("ytdlp://"):
             uri_str = "https" + uri_str[5:]
 
+        ytdl = YoutubeDL(opts, auto_init=False)
+        ytdl.add_info_extractor(ClapperYoutubeIE())
+        for ie in gen_extractor_classes():
+            if ie._ENABLED and ie.ie_key() not in BLACKLIST:
+                ytdl.add_info_extractor(ie)
+
         try:
-            info = self._ytdl.extract_info(uri_str, download=False)
+            info = ytdl.extract_info(uri_str, download=False)
         except Exception as e:
             raise GLib.Error(str(e))
 
@@ -137,7 +133,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             return False
 
         if debug.level >= Gst.DebugLevel.LOG:
-            json_str = json.dumps(self._ytdl.sanitize_info(info), indent=4)
+            json_str = json.dumps(ytdl.sanitize_info(info), indent=4)
             debug.print_leveled(Gst.DebugLevel.LOG, 'Extracted info:\n' + json_str)
 
         is_playlist = False
