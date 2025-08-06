@@ -15,21 +15,13 @@
 # License along with this library; if not, see
 # <https://www.gnu.org/licenses/>.
 
-import os, fnmatch, json, gi
+import os, json, gi
 gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('Gst', '1.0')
 gi.require_version('Clapper', '0.0')
 from gi.repository import GLib, GObject, Gio, Gst, Clapper
-
-debug_level = Gst.DebugLevel.NONE
-for entry in os.getenv('GST_DEBUG', '').split(','):
-    if ':' in entry:
-        pattern, level = entry.rsplit(':', 1)
-        if fnmatch.fnmatch('clapperytdlp', pattern):
-            try: debug_level = int(level)
-            except ValueError: continue
 
 try:
     from yt_dlp import YoutubeDL
@@ -40,6 +32,7 @@ if YoutubeDL:
     from yt_dlp.extractor import gen_extractor_classes
     from clapper_yt_dlp_overrides import BLACKLIST, ClapperYoutubeIE
 
+import clapper_yt_dlp_debug as debug
 import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
@@ -56,8 +49,8 @@ FORMAT_PREFERENCE = '/'.join([
 ])
 
 YTDL_OPTS = {
-    'verbose': debug_level >= Gst.DebugLevel.DEBUG,
-    'quiet': debug_level < Gst.DebugLevel.INFO,
+    'verbose': debug.level >= Gst.DebugLevel.DEBUG,
+    'quiet': debug.level < Gst.DebugLevel.INFO,
     'color': 'never', # no color in exceptions
     'ignoreconfig': True,
     'format': FORMAT_PREFERENCE,
@@ -114,6 +107,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             raise GLib.Error('Could not import "yt-dlp". Please check your installation.')
 
         # Not used during init, so we can alter it here
+        self._ytdl.params['logger'] = debug.ClapperYtDlpLogger(cancellable)
         self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
         if self.cookies_file:
             if os.path.isfile(self.cookies_file):
@@ -125,8 +119,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
         # Limit extraction to first 50 items if not a playlist
         if not uri.get_path().startswith('/playlist'):
             self._ytdl.params['playlist_items'] = '0:50'
-            if debug_level >= Gst.DebugLevel.DEBUG:
-                print('[clapper_yt_dlp] Extraction range limited to first 50 items')
+            debug.print_leveled(Gst.DebugLevel.DEBUG, 'Extraction range limited to first 50 items')
 
         uri_str = uri.to_string()
 
@@ -143,8 +136,9 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
         if cancellable.is_cancelled():
             return False
 
-        if debug_level >= Gst.DebugLevel.LOG:
-            print(json.dumps(self._ytdl.sanitize_info(info), indent=4))
+        if debug.level >= Gst.DebugLevel.LOG:
+            json_str = json.dumps(self._ytdl.sanitize_info(info), indent=4)
+            debug.print_leveled(Gst.DebugLevel.LOG, 'Extracted info:\n' + json_str)
 
         is_playlist = False
 
@@ -165,8 +159,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             return False
 
         extractor_name = info.get('extractor')
-        if debug_level >= Gst.DebugLevel.DEBUG:
-            print(f'[clapper_yt_dlp] Used extractor: "{extractor_name}"')
+        debug.print_leveled(Gst.DebugLevel.DEBUG, f'Used extractor: "{extractor_name}"')
 
         harvest.fill_with_text(media_type, manifest)
 
@@ -192,8 +185,9 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             if (hdrs := info.get('http_headers')):
                 req_headers.update(hdrs)
 
-            if debug_level >= Gst.DebugLevel.DEBUG:
-                print(f'[clapper_yt_dlp] Merged HTTP headers: {json.dumps(req_headers, indent=4)}')
+            if debug.level >= Gst.DebugLevel.DEBUG:
+                json_str = json.dumps(req_headers, indent=4)
+                debug.print_leveled(Gst.DebugLevel.DEBUG, f'Merged HTTP headers: {json_str}')
 
             [harvest.headers_set(key, val) for key, val in req_headers.items()]
 
