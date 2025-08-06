@@ -183,11 +183,19 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
                     title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
                     harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
 
-            # XXX: We just take headers from any format here, do we need to find/combine some?
-            for fmt in info['formats']:
-                if (hdrs := fmt.get('http_headers')):
-                    [harvest.headers_set(key, val) for key, val in hdrs.items()]
-                    break
+            # Find and merge headers for requested formats
+            req_headers = {}
+            if (req_formats := info.get('requested_formats') or info.get('requested_downloads')):
+                for fmt in req_formats:
+                    if (hdrs := fmt.get('http_headers')):
+                        req_headers.update(hdrs)
+            if (hdrs := info.get('http_headers')):
+                req_headers.update(hdrs)
+
+            if debug_level >= Gst.DebugLevel.DEBUG:
+                print(f'[clapper_yt_dlp] Merged HTTP headers: {json.dumps(req_headers, indent=4)}')
+
+            [harvest.headers_set(key, val) for key, val in req_headers.items()]
 
         if Clapper.MINOR_VERSION >= 9 and not info.get('is_live'):
             harvest.set_expiration_seconds(EXPIRATIONS.get(extractor_name, EXPIRATIONS['default']))
