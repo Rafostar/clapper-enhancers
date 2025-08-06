@@ -74,7 +74,12 @@ EXPIRATIONS = {
     'default': 180 # 3 minutes
 }
 
-class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
+# Clapper 0.8 compat
+bases = (GObject.Object, Clapper.Extractable)
+if Clapper.MINOR_VERSION >= 9:
+    bases += (Clapper.Playlistable,)
+
+class ClapperYtDlp(*bases):
     if Clapper.MINOR_VERSION >= 9:
         codecs_order = GObject.Property(type=str, nick='Codecs Order',
             blurb='Comma-separated order of preferred video codecs',
