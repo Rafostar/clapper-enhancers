@@ -5,5 +5,5 @@ Name=yt-dlp
 Description=Media extraction using yt-dlp
 Version=@VERSION@
 X-Interfaces=Extractable
-X-Schemes=https
+X-Schemes=https;ytdlp
 X-Hosts=youtube.com;youtu.be;music.youtube.com;soundcloud.com;on.soundcloud.com;api.soundcloud.com;api-v2.soundcloud.com;twitch.tv;clips.twitch.tv
