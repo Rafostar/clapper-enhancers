@@ -67,6 +67,12 @@ YTDL_OPTS = {
     }
 }
 
+FALLBACK_EXTR_UPDATE = {
+    'youtube': {
+        'player_client': ['tv_simply']
+    }
+}
+
 EXPIRATIONS = {
     'youtube': 900, # 15 minutes
     'youtube:search_url': 300, # 5 minutes
@@ -126,19 +132,49 @@ class ClapperYtDlp(*bases):
             uri_str = "https" + uri_str[5:]
 
         ytdl = YoutubeDL(opts, auto_init=False)
-        ytdl.add_info_extractor(ClapperYoutubeIE())
+        found_key = None
+
+        # Add info extractors and find suitable one for URI while doing so
+        for ie in [ClapperYoutubeIE()]:
+            if not found_key and ie.suitable(uri_str):
+                found_key = ie.ie_key()
+            ytdl.add_info_extractor(ie)
         for ie in gen_extractor_classes():
             if ie._ENABLED and ie.ie_key() not in BLACKLIST:
+                if not found_key and ie.suitable(uri_str):
+                    found_key = ie.ie_key()
                 ytdl.add_info_extractor(ie)
 
+        debug.print_leveled(Gst.DebugLevel.INFO, f'Suitable extractor: {found_key}')
+
+        info = None
+        error_str = None
+
         try:
-            info = ytdl.extract_info(uri_str, download=False)
+            info = ytdl.extract_info(uri_str, download=False, ie_key=found_key)
         except Exception as e:
-            raise GLib.Error(str(e))
+            error_str = str(e)
 
         # Check if cancelled during extraction
         if cancellable.is_cancelled():
             return False
+
+        if not info and found_key:
+            # Retry with different extractor args if available
+            if found_key.lower() in FALLBACK_EXTR_UPDATE:
+                ytdl.params['extractor_args'].update(FALLBACK_EXTR_UPDATE)
+
+                try:
+                    info = ytdl.extract_info(uri_str, download=False, ie_key=found_key)
+                except Exception as e:
+                    raise GLib.Error(str(e))
+            else:
+                # When no fallback, raise initial error
+                raise GLib.Error(error_str)
+
+            # Check if cancelled during retry
+            if cancellable.is_cancelled():
+                return False
 
         if debug.level >= Gst.DebugLevel.LOG:
             json_str = json.dumps(ytdl.sanitize_info(info), indent=4)
