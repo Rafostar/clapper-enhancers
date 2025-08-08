@@ -103,7 +103,10 @@ class ClapperYtDlp(*bases):
         opts = YTDL_OPTS.copy()
 
         opts['logger'] = debug.ClapperYtDlpLogger(cancellable)
-        opts['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
+        opts['format_sort'] = (
+            ['vcodec:' + c.strip() for c in self.codecs_order.split(',')] +
+            ['acodec:mp4a', 'acodec:opus', 'acodec:vorbis', 'acodec:*']
+        )
         if self.cookies_file:
             if os.path.isfile(self.cookies_file):
                 opts['cookies'] = self.cookies_file
