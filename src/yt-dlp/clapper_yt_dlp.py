@@ -114,10 +114,10 @@ class ClapperYtDlp(*bases):
                 raise GLib.Error('Specified cookies file does not exist')
 
         # FIXME: Can this be improved somehow (considering other websites)?
-        # Limit extraction to first 50 items if not a playlist
+        # Limit extraction to first 20 items if not a playlist
         if not uri.get_path().startswith('/playlist'):
-            opts['playlist_items'] = '0:50'
-            debug.print_leveled(Gst.DebugLevel.DEBUG, 'Extraction range limited to first 50 items')
+            opts['playlist_items'] = '0:20'
+            debug.print_leveled(Gst.DebugLevel.DEBUG, 'Extraction range limited to first 20 items')
 
         uri_str = uri.to_string()
 
