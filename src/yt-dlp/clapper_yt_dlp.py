@@ -15,7 +15,7 @@
 # License along with this library; if not, see
 # <https://www.gnu.org/licenses/>.
 
-import os, json, gi
+import os, json, re, shlex, gi
 gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
@@ -88,12 +88,41 @@ class ClapperYtDlp(*bases):
         )
         cookies_file = GObject.Property(type=str, nick='Cookies File',
             blurb='Netscape formatted file to read and write cookies',
-            default='',
+            default=None,
             flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL | Clapper.EnhancerParamFlags.FILEPATH)
+        )
+        extractor_args = GObject.Property(type=str, nick='Extractor Args',
+            blurb='Extractor arguments in KEY:ARGS format with whitespace separation for each KEY',
+            default=None,
+            flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL | Clapper.EnhancerParamFlags.LOCAL)
         )
     else:
         codecs_order = 'avc1,av01,hev1,vp09'
-        cookies_file = ''
+        cookies_file = None
+        extractor_args = None
+
+    def make_extractor_args_dict(self):
+        # Based on yt-dlp _extractor_arg_parser
+        def _parse_pair(key, vals=""):
+            norm_key = key.strip().lower().replace("-", "_")
+            items = re.split(r"(?<!\\),", vals)
+            return norm_key, [v.replace(r"\,", ",").strip() for v in items]
+
+        result = {}
+        # Split on whitespace to get each IE_KEY:ARGS chunk
+        for chunk in shlex.split(self.extractor_args):
+            # Option names are not required, skip them if present
+            if chunk == '--extractor-args':
+                continue
+
+            ie_key, ie_args = chunk.split(":", 1)
+            # Split on semicolons to get each K=V slice
+            subdict = dict(
+                _parse_pair(*arg.split("=", 1)) for arg in ie_args.split(";")
+            )
+            result[ie_key] = subdict
+
+        return result
 
     def do_extract(self, uri: GLib.Uri, harvest: Clapper.Harvest, cancellable: Gio.Cancellable):
         if not YoutubeDL:
@@ -109,9 +138,17 @@ class ClapperYtDlp(*bases):
         )
         if self.cookies_file:
             if os.path.isfile(self.cookies_file):
+                debug.print_leveled(Gst.DebugLevel.INFO, f'Set cookies: {self.cookies_file}')
                 opts['cookies'] = self.cookies_file
             else:
                 raise GLib.Error('Specified cookies file does not exist')
+        if self.extractor_args:
+            try:
+                args_dict = self.make_extractor_args_dict()
+                debug.print_leveled(Gst.DebugLevel.INFO, f'Set extractor_args: {args_dict}')
+                opts['extractor_args'].update(args_dict)
+            except Exception as e:
+                raise GLib.Error(f'Could not parse extractor-args, reason: {str(e)}')
 
         # FIXME: Can this be improved somehow (considering other websites)?
         # Limit extraction to first 20 items if not a playlist
