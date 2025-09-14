@@ -1,6 +1,7 @@
 # Enhancers
 clapper_possible_enhancers = [
   'lbry',
+  'media-scanner',
   'mpris',
   'parser-m3u',
   'peertube',
