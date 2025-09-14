@@ -16,6 +16,11 @@ option('lbry',
   value: 'auto',
   description: 'Clapper Enhancer LBRY'
 )
+option('media-scanner',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer Media Scanner'
+)
 option('mpris',
   type: 'feature',
   value: 'auto',

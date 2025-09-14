@@ -1,0 +1,5 @@
+[Plugin]
+Module=clapper-media-scanner
+Name=Media Scanner
+Description=Discovers queued media information
+Version=@VERSION@
