@@ -15,21 +15,13 @@
 # License along with this library; if not, see
 # <https://www.gnu.org/licenses/>.
 
-import os, fnmatch, json, gi
+import os, json, re, shlex, gi
 gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('Gst', '1.0')
 gi.require_version('Clapper', '0.0')
 from gi.repository import GLib, GObject, Gio, Gst, Clapper
-
-debug_level = Gst.DebugLevel.NONE
-for entry in os.getenv('GST_DEBUG', '').split(','):
-    if ':' in entry:
-        pattern, level = entry.rsplit(':', 1)
-        if fnmatch.fnmatch('clapperytdlp', pattern):
-            try: debug_level = int(level)
-            except ValueError: continue
 
 try:
     from yt_dlp import YoutubeDL
@@ -40,6 +32,7 @@ if YoutubeDL:
     from yt_dlp.extractor import gen_extractor_classes
     from clapper_yt_dlp_overrides import BLACKLIST, ClapperYoutubeIE
 
+import clapper_yt_dlp_debug as debug
 import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
@@ -56,8 +49,8 @@ FORMAT_PREFERENCE = '/'.join([
 ])
 
 YTDL_OPTS = {
-    'verbose': debug_level >= Gst.DebugLevel.DEBUG,
-    'quiet': debug_level < Gst.DebugLevel.INFO,
+    'verbose': debug.level >= Gst.DebugLevel.DEBUG,
+    'quiet': debug.level < Gst.DebugLevel.INFO,
     'color': 'never', # no color in exceptions
     'ignoreconfig': True,
     'format': FORMAT_PREFERENCE,
@@ -81,7 +74,12 @@ EXPIRATIONS = {
     'default': 180 # 3 minutes
 }
 
-class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
+# Clapper 0.8 compat
+bases = (GObject.Object, Clapper.Extractable)
+if Clapper.MINOR_VERSION >= 9:
+    bases += (Clapper.Playlistable,)
+
+class ClapperYtDlp(*bases):
     if Clapper.MINOR_VERSION >= 9:
         codecs_order = GObject.Property(type=str, nick='Codecs Order',
             blurb='Comma-separated order of preferred video codecs',
@@ -90,46 +88,88 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
         )
         cookies_file = GObject.Property(type=str, nick='Cookies File',
             blurb='Netscape formatted file to read and write cookies',
-            default='',
+            default=None,
             flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL | Clapper.EnhancerParamFlags.FILEPATH)
+        )
+        extractor_args = GObject.Property(type=str, nick='Extractor Args',
+            blurb='Extractor arguments in KEY:ARGS format with whitespace separation for each KEY',
+            default=None,
+            flags=(GObject.ParamFlags.READWRITE | Clapper.EnhancerParamFlags.GLOBAL | Clapper.EnhancerParamFlags.LOCAL)
         )
     else:
         codecs_order = 'avc1,av01,hev1,vp09'
-        cookies_file = ''
+        cookies_file = None
+        extractor_args = None
 
-    _ytdl = None
+    def make_extractor_args_dict(self):
+        # Based on yt-dlp _extractor_arg_parser
+        def _parse_pair(key, vals=""):
+            norm_key = key.strip().lower().replace("-", "_")
+            items = re.split(r"(?<!\\),", vals)
+            return norm_key, [v.replace(r"\,", ",").strip() for v in items]
 
-    def __init__(self):
-        if YoutubeDL:
-            self._ytdl = YoutubeDL(YTDL_OPTS, auto_init=False)
+        result = {}
+        # Split on whitespace to get each IE_KEY:ARGS chunk
+        for chunk in shlex.split(self.extractor_args):
+            # Option names are not required, skip them if present
+            if chunk == '--extractor-args':
+                continue
 
-            self._ytdl.add_info_extractor(ClapperYoutubeIE())
+            ie_key, ie_args = chunk.split(":", 1)
+            # Split on semicolons to get each K=V slice
+            subdict = dict(
+                _parse_pair(*arg.split("=", 1)) for arg in ie_args.split(";")
+            )
+            result[ie_key] = subdict
 
-            for ie in gen_extractor_classes():
-                if ie._ENABLED and ie.ie_key() not in BLACKLIST:
-                    self._ytdl.add_info_extractor(ie)
+        return result
 
     def do_extract(self, uri: GLib.Uri, harvest: Clapper.Harvest, cancellable: Gio.Cancellable):
         if not YoutubeDL:
             raise GLib.Error('Could not import "yt-dlp". Please check your installation.')
 
-        # Not used during init, so we can alter it here
-        self._ytdl.params['format_sort'] = ['vcodec:' + c.strip() for c in self.codecs_order.split(',')]
+        # Writable options copy to apply user set properties
+        opts = YTDL_OPTS.copy()
+
+        opts['logger'] = debug.ClapperYtDlpLogger(cancellable)
+        opts['format_sort'] = (
+            ['vcodec:' + c.strip() for c in self.codecs_order.split(',')] +
+            ['acodec:mp4a', 'acodec:opus', 'acodec:vorbis', 'acodec:*']
+        )
         if self.cookies_file:
             if os.path.isfile(self.cookies_file):
-                self._ytdl.params['cookies'] = self.cookies_file
+                debug.print_leveled(Gst.DebugLevel.INFO, f'Set cookies: {self.cookies_file}')
+                opts['cookies'] = self.cookies_file
             else:
                 raise GLib.Error('Specified cookies file does not exist')
+        if self.extractor_args:
+            try:
+                args_dict = self.make_extractor_args_dict()
+                debug.print_leveled(Gst.DebugLevel.INFO, f'Set extractor_args: {args_dict}')
+                opts['extractor_args'].update(args_dict)
+            except Exception as e:
+                raise GLib.Error(f'Could not parse extractor-args, reason: {str(e)}')
 
         # FIXME: Can this be improved somehow (considering other websites)?
-        # Limit extraction to first 50 items if not a playlist
+        # Limit extraction to first 20 items if not a playlist
         if not uri.get_path().startswith('/playlist'):
-            self._ytdl.params['playlist_items'] = '0:50'
-            if debug_level >= Gst.DebugLevel.DEBUG:
-                print('[clapper_yt_dlp] Extraction range limited to first 50 items')
+            opts['playlist_items'] = '0:20'
+            debug.print_leveled(Gst.DebugLevel.DEBUG, 'Extraction range limited to first 20 items')
+
+        uri_str = uri.to_string()
+
+        # Replace custom "ytdlp" scheme with "https"
+        if uri_str.startswith("ytdlp://"):
+            uri_str = "https" + uri_str[5:]
+
+        ytdl = YoutubeDL(opts, auto_init=False)
+        ytdl.add_info_extractor(ClapperYoutubeIE())
+        for ie in gen_extractor_classes():
+            if ie._ENABLED and ie.ie_key() not in BLACKLIST:
+                ytdl.add_info_extractor(ie)
 
         try:
-            info = self._ytdl.extract_info(uri.to_string(), download=False)
+            info = ytdl.extract_info(uri_str, download=False)
         except Exception as e:
             raise GLib.Error(str(e))
 
@@ -137,8 +177,9 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
         if cancellable.is_cancelled():
             return False
 
-        if debug_level >= Gst.DebugLevel.LOG:
-            print(json.dumps(self._ytdl.sanitize_info(info), indent=4))
+        if debug.level >= Gst.DebugLevel.LOG:
+            json_str = json.dumps(ytdl.sanitize_info(info), indent=4)
+            debug.print_leveled(Gst.DebugLevel.LOG, 'Extracted info:\n' + json_str)
 
         is_playlist = False
 
@@ -159,8 +200,7 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
             return False
 
         extractor_name = info.get('extractor')
-        if debug_level >= Gst.DebugLevel.DEBUG:
-            print(f'[clapper_yt_dlp] Used extractor: "{extractor_name}"')
+        debug.print_leveled(Gst.DebugLevel.DEBUG, f'Used extractor: "{extractor_name}"')
 
         harvest.fill_with_text(media_type, manifest)
 
@@ -177,11 +217,20 @@ class ClapperYtDlp(GObject.Object, Clapper.Extractable, Clapper.Playlistable):
                     title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
                     harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
 
-            # XXX: We just take headers from any format here, do we need to find/combine some?
-            for fmt in info['formats']:
-                if (hdrs := fmt.get('http_headers')):
-                    [harvest.headers_set(key, val) for key, val in hdrs.items()]
-                    break
+            # Find and merge headers for requested formats
+            req_headers = {}
+            if (req_formats := info.get('requested_formats') or info.get('requested_downloads')):
+                for fmt in req_formats:
+                    if (hdrs := fmt.get('http_headers')):
+                        req_headers.update(hdrs)
+            if (hdrs := info.get('http_headers')):
+                req_headers.update(hdrs)
+
+            if debug.level >= Gst.DebugLevel.DEBUG:
+                json_str = json.dumps(req_headers, indent=4)
+                debug.print_leveled(Gst.DebugLevel.DEBUG, f'Merged HTTP headers: {json_str}')
+
+            [harvest.headers_set(key, val) for key, val in req_headers.items()]
 
         if Clapper.MINOR_VERSION >= 9 and not info.get('is_live'):
             harvest.set_expiration_seconds(EXPIRATIONS.get(extractor_name, EXPIRATIONS['default']))
