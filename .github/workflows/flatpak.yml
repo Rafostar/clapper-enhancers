@@ -49,6 +49,10 @@ jobs:
       uses: actions/checkout@v4
       with:
         submodules: recursive
+    - name: Version Update
+      run: |
+        git config --global --add safe.directory $GITHUB_WORKSPACE
+        git log -1 --format="%cd-%h" --date=format:'%Y.%m.%d' > VERSION
     - name: Build
       uses: flatpak/flatpak-github-actions/flatpak-builder@master
       with:
