@@ -1,5 +1,5 @@
 project('clapper-enhancers', 'c',
-  version: '0.8.2', # major and minor numbers indicate required libclapper version
+  version: files('VERSION'),
   meson_version: '>= 0.64.0',
   license: 'LGPL-2.1-or-later',
   default_options: [
@@ -8,12 +8,10 @@ project('clapper-enhancers', 'c',
   ],
 )
 
-enhancers_version = meson.project_version().split('-')[0]
-version_array = enhancers_version.split('.')
-
 glib_req = '>= 2.76.0'
-clapper_req = '>= @0@.@1@'.format(version_array[0], version_array[1])
+clapper_req = '>= 0.8.0'
 
+version_array = clapper_req.split('=')[-1].strip().split('.')
 clapper_api_name = 'clapper-@0@.0'.format(version_array[0])
 
 optimization = get_option('optimization')
