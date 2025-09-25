@@ -79,7 +79,7 @@ foreach name : clapper_possible_enhancers
           custom_target(enhancer_plugin_template,
             input: join_paths(name, enhancer_plugin_template),
             output: enhancer_plugin_template.replace('.in', ''),
-            command: [py, files('gen-version.py'), '@INPUT@', meson.project_version()],
+            command: [py, files('gen-version.py'), '@INPUT@', meson.project_version(), get_option('enhancersver')],
             capture: true,
             build_by_default: true,
             build_always_stale: true,

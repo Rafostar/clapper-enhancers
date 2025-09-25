@@ -18,22 +18,25 @@
 import datetime, subprocess, sys
 
 template = open(sys.argv[1]).read()
-version = sys.argv[2]
 
-try:
-    tagged = subprocess.check_output(["git", "tag", "--points-at", "HEAD"]).decode().split()
-    dirty = subprocess.check_output(["git", "describe", "--dirty"]).decode().strip().endswith("-dirty")
-    if not tagged or dirty:
-        if dirty:
-            timestamp = int(datetime.datetime.utcnow().timestamp())
-        else:
-            timestamp = subprocess.check_output(["git", "log", "-1", "--format=%ct"]).decode().strip()
-        sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
-        version += f"+git.{timestamp}~{sha}"
-        if dirty:
-            version += "-dirty"
-except Exception:
-    pass
+if sys.argv[3]:
+    version = sys.argv[3]
+else:
+    version = sys.argv[2]
+    try:
+        tagged = subprocess.check_output(["git", "tag", "--points-at", "HEAD"]).decode().split()
+        dirty = subprocess.check_output(["git", "describe", "--dirty"]).decode().strip().endswith("-dirty")
+        if not tagged or dirty:
+            if dirty:
+                timestamp = int(datetime.datetime.utcnow().timestamp())
+            else:
+                timestamp = subprocess.check_output(["git", "log", "-1", "--format=%ct"]).decode().strip()
+            sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"]).decode().strip()
+            version += f"+git.{timestamp}~{sha}"
+            if dirty:
+                version += "-dirty"
+    except Exception:
+        pass
 
 out = template.replace("@VERSION@", version)
 sys.stdout.write(out)
