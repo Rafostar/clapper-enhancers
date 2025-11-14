@@ -20,6 +20,40 @@
 
 #include <glib.h>
 
+#define COMMON_UTILS_DEFINE_ENUM_TYPE(TypeName, type_name, ...)  \
+    GType type_name_##_get_type (void) {                         \
+      static gsize gtype_id = 0;                                 \
+      if (g_once_init_enter (&gtype_id)) {                       \
+        GType new_type = g_type_from_name (#TypeName);           \
+        if (new_type == 0) {                                     \
+          static const GEnumValue values[] = {                   \
+            __VA_ARGS__,                                         \
+            { 0, NULL, NULL }                                    \
+          };                                                     \
+          new_type = g_enum_register_static (                    \
+              g_intern_static_string (#TypeName), values);       \
+        }                                                        \
+        g_once_init_leave (&gtype_id, new_type);                 \
+    }                                                            \
+    return (GType) gtype_id; }
+
+#define COMMON_UTILS_DEFINE_FLAGS_TYPE(TypeName, type_name, ...) \
+    GType type_name_##_get_type (void) {                         \
+      static gsize gtype_id = 0;                                 \
+      if (g_once_init_enter (&gtype_id)) {                       \
+        GType new_type = g_type_from_name (#TypeName);           \
+        if (new_type == 0) {                                     \
+          static const GFlagsValue values[] = {                  \
+            __VA_ARGS__,                                         \
+            { 0, NULL, NULL }                                    \
+          };                                                     \
+          new_type = g_flags_register_static (                   \
+              g_intern_static_string (#TypeName), values);       \
+        }                                                        \
+        g_once_init_leave (&gtype_id, new_type);                 \
+    }                                                            \
+    return (GType) gtype_id; }
+
 G_BEGIN_DECLS
 
 gchar * common_utils_match_regex (const gchar *expression, const gchar *input);
