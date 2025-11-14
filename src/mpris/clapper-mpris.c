@@ -57,7 +57,7 @@
 
 /* Compat */
 /* FIXME: 1.0: Remove and rename back to ClapperMpris in meson */
-#define clapper_enhancer_debug   clapper_enhancer_mpris_debug
+#define clapper_mpris_debug      clapper_enhancer_mpris_debug
 #define clapper_mpris_get_type   clapper_enhancer_mpris_get_type
 #define clapper_mpris_class_init clapper_enhancer_mpris_class_init
 #define clapper_mpris_init       clapper_enhancer_mpris_init
