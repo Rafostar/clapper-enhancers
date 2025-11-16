@@ -285,6 +285,49 @@ G_DEFINE_TYPE_WITH_CODE (ClapperMediaScanner, clapper_media_scanner, CLAPPER_TYP
     G_IMPLEMENT_INTERFACE (CLAPPER_TYPE_REACTABLE, clapper_media_scanner_reactable_iface_init));
 
 static inline void
+_handle_element_msg (GstMessage *msg, ClapperMediaScanner *self)
+{
+  if (gst_message_has_name (msg, "ClapperPlaylistParsed")) {
+    GstMessage *playlist_msg = NULL;
+
+    GST_OBJECT_LOCK (self);
+
+    /* Scanner knows which media item it scans, so set it in message.
+     * A "scanned_item" is set to non-NULL value only from scanner
+     * thread (this one) which ensures that correct item is used here. */
+    if (self->scanned_item) {
+      const GstStructure *src_structure = gst_message_get_structure (msg);
+      GstStructure *dest_structure;
+
+      GST_DEBUG_OBJECT (self, "Resolved %" GST_PTR_FORMAT
+          "(%s) into a playlist", self->scanned_item, clapper_media_item_get_uri (self->scanned_item));
+
+      dest_structure = gst_structure_copy (src_structure);
+      gst_structure_set (dest_structure,
+          "item", CLAPPER_TYPE_MEDIA_ITEM, self->scanned_item, NULL);
+      playlist_msg = gst_message_new_application (GST_OBJECT_CAST (self), dest_structure);
+    }
+
+    GST_OBJECT_UNLOCK (self);
+
+    if (playlist_msg) {
+      ClapperPlayer *player = clapper_reactable_get_player (CLAPPER_REACTABLE_CAST (self));
+
+      /* Just forward message to the player with scanned item set. No need to
+       * rescan it, as player keeps expanding single pipeline until video plays,
+       * at which point scanner uses collected tags and updates item to final values. */
+      if (G_LIKELY (player != NULL)) {
+        clapper_player_post_message (player, playlist_msg,
+            CLAPPER_PLAYER_MESSAGE_DESTINATION_PLAYER);
+        gst_object_unref (player);
+      } else {
+        gst_message_unref (playlist_msg);
+      }
+    }
+  }
+}
+
+static inline void
 _handle_tag_msg (GstMessage *msg, ClapperMediaScanner *self)
 {
   GstObject *src = GST_MESSAGE_SRC (msg);
@@ -352,7 +395,7 @@ _handle_error_msg (GstMessage *msg, ClapperMediaScanner *self)
 
   gst_message_parse_error (msg, &error, NULL);
   GST_ERROR_OBJECT (self, "Error: %s", error->message);
-  g_clear_error (&error);
+  g_error_free (error);
 
   /* After error we should go to READY, so all elements will stop processing
    * buffers then move to the next item. This function does both. */
@@ -363,6 +406,9 @@ static gboolean
 _bus_message_func (GstBus *bus, GstMessage *msg, ClapperMediaScanner *self)
 {
   switch (GST_MESSAGE_TYPE (msg)) {
+    case GST_MESSAGE_ELEMENT:
+      _handle_element_msg (msg, self);
+      break;
     case GST_MESSAGE_TAG:
       _handle_tag_msg (msg, self);
       break;
