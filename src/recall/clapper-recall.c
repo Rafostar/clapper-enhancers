@@ -288,11 +288,15 @@ _ensure_db (ClapperRecall *self)
 static inline gchar *
 _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
 {
-  const gchar *uri = clapper_media_item_get_uri (memo->item);
   const gchar *seekable_protos[] = { "file", "sftp", "ftp", "smb", "davs", "dav" };
+  const gchar *uri;
+  gchar *redirect_uri, *hash = NULL;
   guint proto_index;
   gboolean proto_found = FALSE;
-  gchar *hash = NULL;
+
+  /* Prefer redirect as URI for hash generation */
+  redirect_uri = clapper_media_item_get_redirect_uri (memo->item);
+  uri = (redirect_uri) ? redirect_uri : clapper_media_item_get_uri (memo->item);
 
   for (proto_index = 0; proto_index < G_N_ELEMENTS (seekable_protos); ++proto_index) {
     if (gst_uri_has_protocol (uri, seekable_protos[proto_index])) {
@@ -322,7 +326,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
       g_clear_error (&error);
       g_object_unref (file);
 
-      return NULL;
+      goto finish;
     }
 
     GST_LOG_OBJECT (self, "%" GST_PTR_FORMAT " file size: %" G_GSIZE_FORMAT,
@@ -334,7 +338,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
           " file size is too small to seek in it", memo->item);
       g_object_unref (file);
 
-      return NULL;
+      goto finish;
     }
 
     if (!(istream = g_file_read (file, NULL, &error))) {
@@ -343,7 +347,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
       g_clear_error (&error);
       g_object_unref (file);
 
-      return NULL;
+      goto finish;
     }
 
     if (g_seekable_can_seek (G_SEEKABLE (istream))) {
@@ -399,6 +403,9 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
     g_object_unref (file);
   }
 
+finish:
+  g_free (redirect_uri);
+
   return hash;
 }
 
@@ -406,15 +413,20 @@ static inline gchar *
 _generate_uri_hash (ClapperRecall *self, ClapperRecallMemo *memo)
 {
   GChecksum *checksum;
-  const gchar *uri;
-  gchar *hash;
+  gchar *redirect_uri, *hash;
 
   GST_DEBUG_OBJECT (self, "Generating %" GST_PTR_FORMAT
       " hash from file URI", memo->item);
 
-  uri = clapper_media_item_get_uri (memo->item);
   checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  g_checksum_update (checksum, (const guchar *) uri, -1);
+
+  if ((redirect_uri = clapper_media_item_get_redirect_uri (memo->item))) {
+    g_checksum_update (checksum, (const guchar *) redirect_uri, -1);
+    g_free (redirect_uri);
+  } else {
+    const gchar *uri = clapper_media_item_get_uri (memo->item);
+    g_checksum_update (checksum, (const guchar *) uri, -1);
+  }
 
   hash = g_strdup (g_checksum_get_string (checksum));
   g_checksum_free (checksum);
@@ -515,6 +527,7 @@ _on_hash_generated_cb (ClapperRecallData *data)
   ClapperRecall *self = data->recall;
 
   /* Move hash into memo, now that we are on enhancer thread */
+  g_free (data->memo->hash);
   data->memo->hash = g_steal_pointer (&data->pending_hash);
   GST_LOG_OBJECT (self, "Hash filled for memo with %" GST_PTR_FORMAT,
       data->memo->item);
@@ -691,19 +704,37 @@ clapper_recall_item_updated (ClapperReactable *reactable, ClapperMediaItem *item
   ClapperRecall *self = CLAPPER_RECALL_CAST (reactable);
   guint index = 0;
 
-  if (!(flags & CLAPPER_REACTABLE_ITEM_UPDATED_DURATION))
+  if (!(flags & (CLAPPER_REACTABLE_ITEM_UPDATED_DURATION | CLAPPER_REACTABLE_ITEM_UPDATED_REDIRECT_URI)))
     return;
 
   if (G_LIKELY (find_memo_by_item (self, item, &index))) {
     ClapperRecallMemo *memo = (ClapperRecallMemo *) g_ptr_array_index (self->memos, index);
-    memo->duration = clapper_media_item_get_duration (memo->item);
 
-    GST_DEBUG_OBJECT (self, "%" GST_PTR_FORMAT " duration updated: %lf",
-        memo->item, memo->duration);
+    if (flags & CLAPPER_REACTABLE_ITEM_UPDATED_REDIRECT_URI) {
+      /* Clear hash and related to it position */
+      g_clear_pointer (&memo->hash, g_free);
+      memo->position = -1;
 
-    if (memo == self->current_memo)
-      _consider_playback_resume (self);
+      GST_DEBUG_OBJECT (self, "%" GST_PTR_FORMAT " redirect URI updated",
+          memo->item);
 
+      /* Regenerate hash for new URI, prepend job if item is current. */
+      g_thread_pool_push (self->pool, clapper_recall_memo_ref (memo), NULL);
+      if (memo == self->current_memo)
+        g_thread_pool_move_to_front (self->pool, self->current_memo);
+    }
+    if (flags & CLAPPER_REACTABLE_ITEM_UPDATED_DURATION) {
+      memo->duration = clapper_media_item_get_duration (memo->item);
+      GST_DEBUG_OBJECT (self, "%" GST_PTR_FORMAT " duration updated: %lf",
+          memo->item, memo->duration);
+
+      /* This checks hash presence, so it will not
+       * resume if redirect URI was changed too */
+      if (memo == self->current_memo)
+        _consider_playback_resume (self);
+    }
+
+    /* Needs to be done for either redirect or duration update */
     _refresh_marker_presence (self, memo, FALSE);
   }
 }
