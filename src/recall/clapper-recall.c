@@ -58,8 +58,7 @@ G_MODULE_EXPORT void peas_register_types (PeasObjectModule *module);
 typedef struct
 {
   gatomicrefcount refcount;
-  gboolean has_hash; // set and get in enhancer thread only
-  gchar *hash; // set from random pool thread
+  gchar *hash; // set and get in enhancer thread only
   ClapperMediaItem *item;
   gdouble position;
   gdouble duration;
@@ -70,6 +69,7 @@ typedef struct
 {
   ClapperRecall *recall;
   ClapperRecallMemo *memo;
+  gchar *pending_hash;
 } ClapperRecallData;
 
 struct _ClapperRecall
@@ -151,12 +151,13 @@ clapper_recall_memo_unref (ClapperRecallMemo *memo)
 }
 
 static ClapperRecallData *
-clapper_recall_data_new_take (ClapperRecall *self, ClapperRecallMemo *memo)
+clapper_recall_data_new_take (ClapperRecall *self, ClapperRecallMemo *memo, gchar *pending_hash)
 {
   ClapperRecallData *data = g_new (ClapperRecallData, 1);
 
   data->recall = self;
-  data->memo = memo; // takes object reference
+  data->memo = memo; // take object reference
+  data->pending_hash = pending_hash; // take generated hash
 
   GST_TRACE ("Created recall data for memo with item %" GST_PTR_FORMAT, data->memo->item);
 
@@ -169,6 +170,7 @@ clapper_recall_data_free (ClapperRecallData *data)
   GST_TRACE ("Freeing recall data for memo with item %" GST_PTR_FORMAT, data->memo->item);
 
   clapper_recall_memo_unref (data->memo); // unref taken object
+  g_free (data->pending_hash); // free taken hash if its still there
   g_free (data);
 }
 
@@ -286,11 +288,15 @@ _ensure_db (ClapperRecall *self)
 static inline gchar *
 _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
 {
-  const gchar *uri = clapper_media_item_get_uri (memo->item);
   const gchar *seekable_protos[] = { "file", "sftp", "ftp", "smb", "davs", "dav" };
+  const gchar *uri;
+  gchar *redirect_uri, *hash = NULL;
   guint proto_index;
   gboolean proto_found = FALSE;
-  gchar *hash = NULL;
+
+  /* Prefer redirect as URI for hash generation */
+  redirect_uri = clapper_media_item_get_redirect_uri (memo->item);
+  uri = (redirect_uri) ? redirect_uri : clapper_media_item_get_uri (memo->item);
 
   for (proto_index = 0; proto_index < G_N_ELEMENTS (seekable_protos); ++proto_index) {
     if (gst_uri_has_protocol (uri, seekable_protos[proto_index])) {
@@ -320,7 +326,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
       g_clear_error (&error);
       g_object_unref (file);
 
-      return NULL;
+      goto finish;
     }
 
     GST_LOG_OBJECT (self, "%" GST_PTR_FORMAT " file size: %" G_GSIZE_FORMAT,
@@ -332,7 +338,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
           " file size is too small to seek in it", memo->item);
       g_object_unref (file);
 
-      return NULL;
+      goto finish;
     }
 
     if (!(istream = g_file_read (file, NULL, &error))) {
@@ -341,7 +347,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
       g_clear_error (&error);
       g_object_unref (file);
 
-      return NULL;
+      goto finish;
     }
 
     if (g_seekable_can_seek (G_SEEKABLE (istream))) {
@@ -397,6 +403,9 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
     g_object_unref (file);
   }
 
+finish:
+  g_free (redirect_uri);
+
   return hash;
 }
 
@@ -404,15 +413,20 @@ static inline gchar *
 _generate_uri_hash (ClapperRecall *self, ClapperRecallMemo *memo)
 {
   GChecksum *checksum;
-  const gchar *uri;
-  gchar *hash;
+  gchar *redirect_uri, *hash;
 
   GST_DEBUG_OBJECT (self, "Generating %" GST_PTR_FORMAT
       " hash from file URI", memo->item);
 
-  uri = clapper_media_item_get_uri (memo->item);
   checksum = g_checksum_new (G_CHECKSUM_SHA256);
-  g_checksum_update (checksum, (const guchar *) uri, -1);
+
+  if ((redirect_uri = clapper_media_item_get_redirect_uri (memo->item))) {
+    g_checksum_update (checksum, (const guchar *) redirect_uri, -1);
+    g_free (redirect_uri);
+  } else {
+    const gchar *uri = clapper_media_item_get_uri (memo->item);
+    g_checksum_update (checksum, (const guchar *) uri, -1);
+  }
 
   hash = g_strdup (g_checksum_get_string (checksum));
   g_checksum_free (checksum);
@@ -432,7 +446,7 @@ static void
 _consider_playback_resume (ClapperRecall *self)
 {
   if (self->resume_done
-      || !self->current_memo->has_hash // if has hash is set, position was restored too
+      || !self->current_memo->hash // if "hash" is set, "position" was restored too
       || self->current_memo->duration <= 0
       || self->state < CLAPPER_PLAYER_STATE_PAUSED)
     return;
@@ -508,15 +522,15 @@ _refresh_all_markers_presence (ClapperRecall *self)
 }
 
 static gboolean
-_on_hash_filled_cb (ClapperRecallData *data)
+_on_hash_generated_cb (ClapperRecallData *data)
 {
   ClapperRecall *self = data->recall;
 
+  /* Move hash into memo, now that we are on enhancer thread */
+  g_free (data->memo->hash);
+  data->memo->hash = g_steal_pointer (&data->pending_hash);
   GST_LOG_OBJECT (self, "Hash filled for memo with %" GST_PTR_FORMAT,
       data->memo->item);
-
-  /* NOTE: This tells us that accessing hash value is now safe */
-  data->memo->has_hash = TRUE;
 
   /* Only read from DB if persistent storage is enabled and item did not play yet.
    * Otherwise if played before hash generation finished, keep that position value. */
@@ -549,24 +563,25 @@ _on_hash_filled_cb (ClapperRecallData *data)
 }
 
 static void
-_memo_fill_hash_in_thread (ClapperRecallMemo *memo, ClapperRecall *self)
+_memo_generate_hash_in_thread (ClapperRecallMemo *memo, ClapperRecall *self)
 {
   ClapperRecallData *recall_data;
+  gchar *hash;
 
   GST_DEBUG_OBJECT (self, "Generating hash for item: %" GST_PTR_FORMAT, memo->item);
 
-  if (!(memo->hash = _generate_data_hash (self, memo)))
-    memo->hash = _generate_uri_hash (self, memo);
+  if (!(hash = _generate_data_hash (self, memo)))
+    hash = _generate_uri_hash (self, memo); // Fallback that never fails
 
   GST_DEBUG_OBJECT (self, "Generated hash for item: %" GST_PTR_FORMAT ": %s",
-      memo->item, memo->hash);
+      memo->item, hash);
 
   /* Thread pool does not call free func on successful run,
    * so we take it here without an additional ref */
-  recall_data = clapper_recall_data_new_take (self, memo);
+  recall_data = clapper_recall_data_new_take (self, memo, hash);
 
   g_main_context_invoke_full (self->context, G_PRIORITY_DEFAULT,
-      (GSourceFunc) _on_hash_filled_cb, recall_data,
+      (GSourceFunc) _on_hash_generated_cb, recall_data,
       (GDestroyNotify) clapper_recall_data_free);
 }
 
@@ -595,7 +610,7 @@ memorize_current_memo_position (ClapperRecall *self)
   GST_LOG_OBJECT (self, "Memorize");
 
   if (!self->persistent_storage
-      || !self->current_memo->has_hash
+      || !self->current_memo->hash
       || self->current_memo->duration <= 0
       || !_ensure_db (self))
     return;
@@ -675,7 +690,7 @@ clapper_recall_played_item_changed (ClapperReactable *reactable, ClapperMediaIte
   self->resume_done = FALSE;
 
   /* Prioritize hash generation for played item */
-  if (self->current_memo && !self->current_memo->has_hash) {
+  if (self->current_memo && !self->current_memo->hash) {
     if (g_thread_pool_move_to_front (self->pool, self->current_memo))
       GST_DEBUG_OBJECT (self, "Prioritized %" GST_PTR_FORMAT, self->current_memo->item);
     else // in middle of hash generation
@@ -689,19 +704,37 @@ clapper_recall_item_updated (ClapperReactable *reactable, ClapperMediaItem *item
   ClapperRecall *self = CLAPPER_RECALL_CAST (reactable);
   guint index = 0;
 
-  if (!(flags & CLAPPER_REACTABLE_ITEM_UPDATED_DURATION))
+  if (!(flags & (CLAPPER_REACTABLE_ITEM_UPDATED_DURATION | CLAPPER_REACTABLE_ITEM_UPDATED_REDIRECT_URI)))
     return;
 
   if (G_LIKELY (find_memo_by_item (self, item, &index))) {
     ClapperRecallMemo *memo = (ClapperRecallMemo *) g_ptr_array_index (self->memos, index);
-    memo->duration = clapper_media_item_get_duration (memo->item);
 
-    GST_DEBUG_OBJECT (self, "%" GST_PTR_FORMAT " duration updated: %lf",
-        memo->item, memo->duration);
+    if (flags & CLAPPER_REACTABLE_ITEM_UPDATED_REDIRECT_URI) {
+      /* Clear hash and related to it position */
+      g_clear_pointer (&memo->hash, g_free);
+      memo->position = -1;
 
-    if (memo == self->current_memo)
-      _consider_playback_resume (self);
+      GST_DEBUG_OBJECT (self, "%" GST_PTR_FORMAT " redirect URI updated",
+          memo->item);
 
+      /* Regenerate hash for new URI, prepend job if item is current. */
+      g_thread_pool_push (self->pool, clapper_recall_memo_ref (memo), NULL);
+      if (memo == self->current_memo)
+        g_thread_pool_move_to_front (self->pool, self->current_memo);
+    }
+    if (flags & CLAPPER_REACTABLE_ITEM_UPDATED_DURATION) {
+      memo->duration = clapper_media_item_get_duration (memo->item);
+      GST_DEBUG_OBJECT (self, "%" GST_PTR_FORMAT " duration updated: %lf",
+          memo->item, memo->duration);
+
+      /* This checks hash presence, so it will not
+       * resume if redirect URI was changed too */
+      if (memo == self->current_memo)
+        _consider_playback_resume (self);
+    }
+
+    /* Needs to be done for either redirect or duration update */
     _refresh_marker_presence (self, memo, FALSE);
   }
 }
@@ -804,7 +837,7 @@ clapper_recall_init (ClapperRecall *self)
 {
   self->context = g_main_context_get_thread_default ();
 
-  self->pool = g_thread_pool_new_full ((GFunc) _memo_fill_hash_in_thread,
+  self->pool = g_thread_pool_new_full ((GFunc) _memo_generate_hash_in_thread,
       self, (GDestroyNotify) clapper_recall_memo_unref,
       MAX (MIN (2, g_get_num_processors ()), 1), // 2 threads should be enough
       FALSE, NULL);
