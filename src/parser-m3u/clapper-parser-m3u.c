@@ -147,6 +147,7 @@ clapper_parser_m3u_parse (ClapperPlaylistable *playlistable, GUri *uri, GBytes *
             gst_clear_tag_list (&tags);
           }
           g_list_store_append (playlist, (GObject *) item);
+          gst_object_unref (item);
           success = TRUE;
         }
         break;
