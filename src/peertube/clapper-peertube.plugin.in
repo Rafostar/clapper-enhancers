@@ -1,6 +1,6 @@
 [Plugin]
 Module=clapper-peertube
-Name=peertube
+Name=PeerTube
 Description=PeerTube support (use "peertube://" URI scheme)
 Version=@VERSION@
 X-Interfaces=Extractable
