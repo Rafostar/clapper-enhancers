@@ -11,6 +11,11 @@ option('enhancersver',
 )
 
 # Enhancers
+option('control-hub',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer Control Hub'
+)
 option('lbry',
   type: 'feature',
   value: 'auto',
