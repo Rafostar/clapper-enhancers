@@ -42,7 +42,9 @@ struct _ClapperControlHubMdns
   gchar *service_link;
   gchar **txt_records;
 
-  gint port; // atomic
+  /* Atomic */
+  gint run;
+  gint port;
 };
 
 G_GNUC_INTERNAL

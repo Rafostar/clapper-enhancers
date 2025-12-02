@@ -47,10 +47,6 @@ _send_entries (ClapperControlHubMdns *self, const struct sockaddr *addr,
   struct mdns_hdr hdr = { 0, };
   struct rr_data_txt txt_data[N_TXT];
 
-  /* When stop was requested */
-  if (port <= 0)
-    return;
-
   GST_LOG_OBJECT (self, "Preparing answers for MDNS query, service: \"%s\""
       ", domain: \"%s\", link: \"%s\"",
       CLAPPER_CONTROL_HUB_MDNS_SERVICE, self->domain_name, self->service_link);
@@ -139,7 +135,7 @@ _mdns_cb (ClapperControlHubMdns *self, const struct sockaddr *addr,
 static gboolean
 mdns_stop_cb (ClapperControlHubMdns *self)
 {
-  return (g_atomic_int_get (&self->port) <= 0);
+  return (g_atomic_int_get (&self->run) == 0);
 }
 
 static void
@@ -260,13 +256,15 @@ clapper_control_hub_mdns_start (ClapperControlHubMdns *self, gint port)
   GMainContext *context = clapper_threaded_object_get_context (CLAPPER_THREADED_OBJECT_CAST (self));
 
   g_atomic_int_set (&self->port, port);
+  g_atomic_int_set (&self->run, 1);
+
   g_main_context_invoke (context, (GSourceFunc) _serve_in_thread_func, self);
 }
 
 void
 clapper_control_hub_mdns_stop (ClapperControlHubMdns *self)
 {
-  g_atomic_int_set (&self->port, 0);
+  g_atomic_int_set (&self->run, 0);
 }
 
 static void
