@@ -1,0 +1,5 @@
+[Plugin]
+Module=clapper-control-hub
+Name=Control Hub
+Description=Allows to control playback remotely
+Version=@VERSION@

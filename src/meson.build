@@ -1,5 +1,6 @@
 # Enhancers
 clapper_possible_enhancers = [
+  'control-hub',
   'lbry',
   'media-scanner',
   'mpris',
