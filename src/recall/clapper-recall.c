@@ -353,7 +353,7 @@ _generate_data_hash (ClapperRecall *self, ClapperRecallMemo *memo)
     if (g_seekable_can_seek (G_SEEKABLE (istream))) {
       GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
       const guint offsets[] = { 0, 10, 20 };
-      gchar buffer[CHUNK_SIZE];
+      guint8 buffer[CHUNK_SIZE];
       guint i;
       gboolean success = TRUE;
 
