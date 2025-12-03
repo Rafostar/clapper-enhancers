@@ -792,7 +792,7 @@ static void
 clapper_recall_queue_cleared (ClapperReactable *reactable)
 {
   ClapperRecall *self = CLAPPER_RECALL_CAST (reactable);
-  guint n_items = self->memos->len;
+  guint i;
 
   if (self->current_memo) {
     self->current_memo->position = self->played_position;
@@ -801,17 +801,14 @@ clapper_recall_queue_cleared (ClapperReactable *reactable)
     self->current_memo = NULL;
   }
 
-  if (n_items > 0) {
-    guint i;
+  i = self->memos->len;
+  while (i-- > 0) {
+    ClapperRecallMemo *memo = (ClapperRecallMemo *) g_ptr_array_steal_index (self->memos, i);
 
-    for (i = n_items - 1; i >= 0; --i) {
-      ClapperRecallMemo *memo = (ClapperRecallMemo *) g_ptr_array_steal_index (self->memos, i);
+    if (memo->marker)
+      timeline_remove_marker (self, memo);
 
-      if (memo->marker)
-        timeline_remove_marker (self, memo);
-
-      clapper_recall_memo_unref (memo);
-    }
+    clapper_recall_memo_unref (memo);
   }
 }
 
