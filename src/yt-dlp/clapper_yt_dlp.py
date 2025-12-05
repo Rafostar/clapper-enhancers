@@ -58,8 +58,7 @@ YTDL_OPTS = {
     'noplaylist': True,
     'extractor_args': {
         'youtube': {
-            'skip': ['translated_subs'],
-            'player_client': ['ios']
+            'skip': ['translated_subs']
         },
         'youtubetab': {
             'skip': ['webpage']
