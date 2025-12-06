@@ -145,16 +145,15 @@ clapper_control_hub_json_build_item_info (ClapperControlHub *hub, ClapperMediaIt
         ClapperTimeline *timeline = clapper_media_item_get_timeline (item);
         guint i, n_markers = clapper_timeline_get_n_markers (timeline);
         for (i = 0; i < n_markers; ++i) {
+          ClapperMarker *marker = clapper_timeline_get_marker (timeline, i);
+          if (!marker) break;
           _ADD_OBJECT ({
-            ClapperMarker *marker;
-            if ((marker = clapper_timeline_get_marker (timeline, i))) {
-              _ADD_KEY_VAL ("marker_type", "%u", clapper_marker_get_marker_type (marker));
-              _ADD_KEY_VAL ("title", "\"%s\"", clapper_marker_get_title (marker));
-              _ADD_KEY_VAL ("start", "%.3lf", clapper_marker_get_start (marker));
-              _ADD_KEY_VAL ("end", "%.3lf", clapper_marker_get_end (marker));
-              gst_object_unref (marker);
-            }
+            _ADD_KEY_VAL ("marker_type", "%u", clapper_marker_get_marker_type (marker));
+            _ADD_KEY_VAL ("title", "\"%s\"", clapper_marker_get_title (marker));
+            _ADD_KEY_VAL ("start", "%.3lf", clapper_marker_get_start (marker));
+            _ADD_KEY_VAL ("end", "%.3lf", clapper_marker_get_end (marker));
           });
+          gst_object_unref (marker);
         }
       });
     }
