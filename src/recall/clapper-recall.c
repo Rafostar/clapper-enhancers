@@ -474,7 +474,7 @@ timeline_insert_marker (ClapperRecall *self, ClapperRecallMemo *memo)
   ClapperTimeline *timeline = clapper_media_item_get_timeline (memo->item);
 
   GST_TRACE_OBJECT (self, "Insert marker into: %" GST_PTR_FORMAT, memo->item);
-  clapper_timeline_insert_marker (timeline, memo->marker);
+  clapper_reactable_timeline_insert_sync (CLAPPER_REACTABLE_CAST (self), timeline, memo->marker);
 }
 
 static void
@@ -483,7 +483,7 @@ timeline_remove_marker (ClapperRecall *self, ClapperRecallMemo *memo)
   ClapperTimeline *timeline = clapper_media_item_get_timeline (memo->item);
 
   GST_TRACE_OBJECT (self, "Remove marker from: %" GST_PTR_FORMAT, memo->item);
-  clapper_timeline_remove_marker (timeline, memo->marker);
+  clapper_reactable_timeline_remove_sync (CLAPPER_REACTABLE_CAST (self), timeline, memo->marker);
 }
 
 static void
