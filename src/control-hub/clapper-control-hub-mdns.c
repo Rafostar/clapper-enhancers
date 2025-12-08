@@ -18,6 +18,9 @@
 
 #include "config.h"
 
+#include <gst/gst.h>
+#include <sys/socket.h>
+
 #include "clapper-control-hub-mdns.h"
 
 #define CLAPPER_CONTROL_HUB_MDNS_SERVICE "_clapper._tcp.local"
