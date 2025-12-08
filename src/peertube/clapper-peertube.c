@@ -79,7 +79,7 @@ _read_uris_array_cb (JsonReader *reader, ClapperHarvest *harvest, const gchar *k
   gboolean filled = FALSE;
 
   if ((uri = json_utils_get_string (reader, key_str, NULL)))
-    filled = clapper_harvest_fill_with_text (harvest, "text/uri-list", g_strdup (uri));
+    filled = clapper_harvest_fill_with_text (harvest, "text/x-uri", g_strdup (uri));
 
   return !filled;
 }
