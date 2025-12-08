@@ -142,7 +142,7 @@ _fill_harvest (ClapperLbry *self, JsonReader *reader, ClapperHarvest *harvest,
       NULL);
 
   /* Harvest takes data (transfer full) */
-  clapper_harvest_fill_with_text (harvest, "text/uri-list", self->streaming_url);
+  clapper_harvest_fill_with_text (harvest, "text/x-uri", self->streaming_url);
   self->streaming_url = NULL; // safety
 
   GST_DEBUG_OBJECT (self, "Harvest done");
