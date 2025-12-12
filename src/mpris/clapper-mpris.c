@@ -277,13 +277,16 @@ _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
   GVariantBuilder builder;
   GVariant *variant;
   const gchar *uri;
-  gchar *title;
+  gchar *string;
   gint64 duration;
+  gboolean has_art_url = FALSE;
+#if CLAPPER_CHECK_VERSION(0,9,1)
+  GstTagList *tags;
+#endif
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
 
   uri = clapper_media_item_get_uri (track->item);
-  title = clapper_media_item_get_title (track->item);
   duration = CLAPPER_MPRIS_SECONDS_TO_USECONDS (
       clapper_media_item_get_duration (track->item));
 
@@ -293,22 +296,30 @@ _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
       g_variant_new_int64 (duration));
   g_variant_builder_add (&builder, "{sv}", "xesam:url",
       g_variant_new_string (uri));
-  if (title) {
+  if ((string = clapper_media_item_get_title (track->item))) {
     g_variant_builder_add (&builder, "{sv}", "xesam:title",
-        g_variant_new_string (title));
+        g_variant_new_take_string (string));
+  }
+#if CLAPPER_CHECK_VERSION(0,9,1)
+  tags = clapper_media_item_get_tags (track->item);
+
+  if (gst_tag_list_get_string (tags, GST_TAG_ARTIST, &string)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:artist",
+        g_variant_new_take_string (string));
   }
 
   /* TODO: Fill more xesam props from tags within media info */
 
+  gst_tag_list_unref (tags);
+#endif
+
   /* TODO: Support image sample or per-item custom artwork */
-  if (self->fallback_art_url) {
+  if (!has_art_url && self->fallback_art_url) {
     g_variant_builder_add (&builder, "{sv}", "mpris:artUrl",
         g_variant_new_string (self->fallback_art_url));
   }
 
   variant = g_variant_builder_end (&builder);
-
-  g_free (title);
 
   return variant;
 }
