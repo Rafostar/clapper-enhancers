@@ -271,34 +271,129 @@ _mpris_find_track_by_id (ClapperMpris *self, const gchar *search_id, guint *inde
   return FALSE;
 }
 
+static gchar **
+_make_tag_strv (GstTagList *tags, const gchar *tag)
+{
+  guint n_tags = gst_tag_list_get_tag_size (tags, tag);
+  gchar **strv = NULL;
+
+  if (n_tags > 0) {
+    GStrvBuilder *builder = g_strv_builder_new ();
+    const gchar *value;
+    guint i;
+
+    for (i = 0; i < n_tags; ++i) {
+      /* Amount of tags was checked, so success is expected */
+      if (G_LIKELY (gst_tag_list_peek_string_index (tags, tag, i, &value)))
+        g_strv_builder_add (builder, value);
+    }
+
+    strv = g_strv_builder_end (builder);
+    g_strv_builder_unref (builder);
+  }
+
+  return strv;
+}
+
 static GVariant *
 _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
 {
   GVariantBuilder builder;
   GVariant *variant;
-  const gchar *uri;
-  gchar *title;
-  gint64 duration;
+  GstTagList *tags;
+  GstDateTime *dt_val;
+  GDate *date_val;
+  gchar **strv_val;
+  gdouble dbl_val;
+  guint uint_val;
+  gchar *str_val;
 
   g_variant_builder_init (&builder, G_VARIANT_TYPE_ARRAY);
-
-  uri = clapper_media_item_get_uri (track->item);
-  title = clapper_media_item_get_title (track->item);
-  duration = CLAPPER_MPRIS_SECONDS_TO_USECONDS (
-      clapper_media_item_get_duration (track->item));
 
   g_variant_builder_add (&builder, "{sv}", "mpris:trackid",
       g_variant_new_string (track->id));
   g_variant_builder_add (&builder, "{sv}", "mpris:length",
-      g_variant_new_int64 (duration));
+      g_variant_new_int64 (CLAPPER_MPRIS_SECONDS_TO_USECONDS (
+      clapper_media_item_get_duration (track->item))));
   g_variant_builder_add (&builder, "{sv}", "xesam:url",
-      g_variant_new_string (uri));
-  if (title) {
+      g_variant_new_string (clapper_media_item_get_uri (track->item)));
+  if ((str_val = clapper_media_item_get_title (track->item))) {
     g_variant_builder_add (&builder, "{sv}", "xesam:title",
-        g_variant_new_string (title));
+        g_variant_new_take_string (str_val));
   }
 
-  /* TODO: Fill more xesam props from tags within media info */
+  tags = clapper_media_item_get_tags (track->item);
+
+  if (gst_tag_list_get_string (tags, GST_TAG_ALBUM, &str_val)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:album",
+        g_variant_new_take_string (str_val));
+  }
+  if ((strv_val = _make_tag_strv (tags, GST_TAG_ALBUM_ARTIST))) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:albumArtist",
+        g_variant_new_strv ((const gchar * const *) strv_val, -1));
+    g_strfreev (strv_val);
+  }
+  if ((strv_val = _make_tag_strv (tags, GST_TAG_ARTIST))) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:artist",
+        g_variant_new_strv ((const gchar * const *) strv_val, -1));
+    g_strfreev (strv_val);
+  }
+  if (gst_tag_list_get_string (tags, GST_TAG_LYRICS, &str_val)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:asText",
+        g_variant_new_take_string (str_val));
+  }
+  if (gst_tag_list_get_double (tags, GST_TAG_BEATS_PER_MINUTE, &dbl_val)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:audioBPM",
+        g_variant_new_int32 ((gint) dbl_val));
+  }
+  if ((strv_val = _make_tag_strv (tags, GST_TAG_COMMENT))) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:comment",
+        g_variant_new_strv ((const gchar * const *) strv_val, -1));
+    g_strfreev (strv_val);
+  }
+  if ((strv_val = _make_tag_strv (tags, GST_TAG_COMPOSER))) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:composer",
+        g_variant_new_strv ((const gchar * const *) strv_val, -1));
+    g_strfreev (strv_val);
+  }
+
+  /* Either date with time or date alone can be used for content created,
+   * as MPRIS clients are expected to mostly care for a year only. */
+  if (gst_tag_list_get_date_time (tags, GST_TAG_DATE_TIME, &dt_val)) {
+    if ((str_val = gst_date_time_to_iso8601_string (dt_val))) {
+      g_variant_builder_add (&builder, "{sv}", "xesam:contentCreated",
+          g_variant_new_take_string (str_val));
+    }
+    gst_date_time_unref (dt_val);
+  } else if (gst_tag_list_get_date (tags, GST_TAG_DATE, &date_val)) {
+    gchar buf[11]; // "YYYY-MM-DD" + NULL
+
+    g_date_strftime (buf, sizeof (buf), "%Y-%m-%d", date_val);
+    g_variant_builder_add (&builder, "{sv}", "xesam:contentCreated",
+        g_variant_new_string (buf));
+
+    g_date_free (date_val);
+  }
+
+  if (gst_tag_list_get_uint (tags, GST_TAG_ALBUM_VOLUME_NUMBER, &uint_val)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:discNumber",
+        g_variant_new_int32 ((gint) uint_val));
+  }
+  if ((strv_val = _make_tag_strv (tags, GST_TAG_GENRE))) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:genre",
+        g_variant_new_strv ((const gchar * const *) strv_val, -1));
+    g_strfreev (strv_val);
+  }
+  if (gst_tag_list_get_uint (tags, GST_TAG_TRACK_NUMBER, &uint_val)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:trackNumber",
+        g_variant_new_int32 ((gint) uint_val));
+  }
+  if (gst_tag_list_get_uint (tags, GST_TAG_USER_RATING, &uint_val)) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:userRating",
+        g_variant_new_double ((gdouble) uint_val / 100));
+  }
+
+  gst_tag_list_unref (tags);
 
   /* TODO: Support image sample or per-item custom artwork */
   if (self->fallback_art_url) {
@@ -307,8 +402,6 @@ _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
   }
 
   variant = g_variant_builder_end (&builder);
-
-  g_free (title);
 
   return variant;
 }
@@ -361,7 +454,7 @@ clapper_mpris_refresh_all_tracks (ClapperMpris *self)
 static void
 clapper_mpris_refresh_track_list (ClapperMpris *self)
 {
-  GStrvBuilder *builder = NULL;
+  GStrvBuilder *builder;
   gchar **tracks_ids;
   guint i;
 

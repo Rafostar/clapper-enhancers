@@ -8,7 +8,7 @@ if not os_supported
   subdir_done()
 endif
 
-if not clapper_dep.found() or not clapper_dep.version().version_compare('>= 0.9.0')
+if not clapper_dep.found() or not clapper_dep.version().version_compare('>= 0.9.1')
   if enhancer_option.enabled()
     error('@0@ enhancer was enabled, but Clapper version requirement is not met'.format(name))
   endif
