@@ -315,11 +315,17 @@ _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
   g_variant_builder_add (&builder, "{sv}", "mpris:length",
       g_variant_new_int64 (CLAPPER_MPRIS_SECONDS_TO_USECONDS (
       clapper_media_item_get_duration (track->item))));
-  g_variant_builder_add (&builder, "{sv}", "xesam:url",
-      g_variant_new_string (clapper_media_item_get_uri (track->item)));
   if ((str_val = clapper_media_item_get_title (track->item))) {
     g_variant_builder_add (&builder, "{sv}", "xesam:title",
         g_variant_new_take_string (str_val));
+  }
+
+  if ((str_val = clapper_media_item_get_redirect_uri (track->item))) {
+    g_variant_builder_add (&builder, "{sv}", "xesam:url",
+        g_variant_new_take_string (str_val));
+  } else {
+    g_variant_builder_add (&builder, "{sv}", "xesam:url",
+        g_variant_new_string (clapper_media_item_get_uri (track->item)));
   }
 
   tags = clapper_media_item_get_tags (track->item);
