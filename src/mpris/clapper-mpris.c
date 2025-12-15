@@ -779,11 +779,12 @@ clapper_mpris_queue_item_added (ClapperReactable *reactable, ClapperMediaItem *i
   clapper_mpris_refresh_track_list (self);
   clapper_mpris_refresh_can_go_next_previous (self);
 
-  variant = _mpris_build_track_metadata (self, track);
+  variant = g_variant_take_ref (_mpris_build_track_metadata (self, track));
 
   /* NoTrack when item is added at first position in queue */
   clapper_mpris_media_player2_track_list_emit_track_added (self->tracks_skeleton,
       variant, (prev_track != NULL) ? prev_track->id : CLAPPER_MPRIS_NO_TRACK);
+  g_variant_unref (variant);
 }
 
 static void
