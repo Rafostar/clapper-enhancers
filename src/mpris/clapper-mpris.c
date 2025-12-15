@@ -21,10 +21,12 @@
  *
  * An enhancer that adds `MPRIS` support to the player.
  *
- * In order for this enhancer to work with a player
- * instance, application must set "own-name", "identity"
+ * In order for this enhancer to work with a player instance,
+ * application must set "app-id", "own-name", "identity"
  * and "desktop-entry" (this one can be set to %NULL).
  */
+
+#include "config.h"
 
 #include <glib.h>
 #include <glib-object.h>
@@ -155,6 +157,7 @@ typedef struct
 {
   gchar *id;
   ClapperMediaItem *item;
+  gchar *art_url;
 } ClapperMprisTrack;
 
 struct _ClapperMpris
@@ -180,6 +183,7 @@ struct _ClapperMpris
   ClapperQueueProgressionMode default_mode;
   ClapperQueueProgressionMode non_shuffle_mode;
 
+  gchar *app_id;
   gchar *own_name;
   gchar *identity;
 
@@ -193,6 +197,7 @@ struct _ClapperMpris
 enum
 {
   PROP_0,
+  PROP_APP_ID,
   PROP_OWN_NAME,
   PROP_IDENTITY,
   PROP_DESKTOP_ENTRY,
@@ -216,6 +221,7 @@ clapper_mpris_track_new (ClapperMediaItem *item)
       clapper_media_item_get_id (item));
 
   track->item = gst_object_ref (item);
+  track->art_url = NULL;
 
   GST_TRACE ("Created track: %s", track->id);
 
@@ -229,6 +235,13 @@ clapper_mpris_track_free (ClapperMprisTrack *track)
 
   g_free (track->id);
   gst_object_unref (track->item);
+
+  if (track->art_url) {
+    GFile *file = g_file_new_for_uri (track->art_url);
+    g_file_delete (file, NULL, NULL);
+    g_object_unref (file);
+    g_free (track->art_url);
+  }
 
   g_free (track);
 }
@@ -295,12 +308,134 @@ _make_tag_strv (GstTagList *tags, const gchar *tag)
   return strv;
 }
 
+static GstSample *
+_get_image_sample (GstTagList *tags, const gchar *tag)
+{
+  GstSample *sample = NULL;
+  guint i, n_tags = gst_tag_list_get_tag_size (tags, tag);
+
+  for (i = 0; i < n_tags; ++i) {
+    GstSample *next_sample;
+    GstStructure *next_structure;
+
+    /* Amount of tags was checked, so success is expected */
+    if (G_UNLIKELY (!gst_tag_list_get_sample_index (tags, tag, i, &next_sample)))
+      continue;
+
+    next_structure = gst_caps_get_structure (gst_sample_get_caps (next_sample), 0);
+
+    /* Check for compatible media type */
+    if (!g_str_has_prefix (gst_structure_get_name (next_structure), "image/")) {
+      gst_sample_unref (next_sample);
+      continue;
+    }
+
+    /* If no compatible sample yet */
+    if (!sample) {
+      sample = next_sample;
+    } else {
+      GstStructure *structure = gst_caps_get_structure (gst_sample_get_caps (sample), 0);
+      gint width = 0, height = 0, next_width = 0, next_height = 0;
+
+      gst_structure_get (structure,
+          "width", G_TYPE_INT, &width,
+          "height", G_TYPE_INT, &height, NULL);
+      gst_structure_get (next_structure,
+          "width", G_TYPE_INT, &next_width,
+          "height", G_TYPE_INT, &next_height, NULL);
+
+      /* Better if higher resolution */
+      if (next_width * next_height > width * height) {
+        gst_sample_unref (sample);
+        sample = next_sample;
+      } else {
+        gst_sample_unref (next_sample);
+      }
+    }
+  }
+
+  return sample;
+}
+
+static gchar *
+_unpack_image_sample (ClapperMpris *self, ClapperMprisTrack *track, GstSample *sample)
+{
+  GFile *data_dir;
+  GError *error = NULL;
+  gchar *dest_uri = NULL;
+
+  GST_DEBUG_OBJECT (self, "Unpacking image sample...");
+
+  data_dir = g_file_new_build_filename (g_get_user_runtime_dir (),
+      "app", self->app_id, CLAPPER_API_NAME, "enhancers", "clapper-mpris",
+      self->own_name, NULL);
+
+  if (!g_file_make_directory_with_parents (data_dir, NULL, &error)) {
+    if (error->domain != G_IO_ERROR || error->code != G_IO_ERROR_EXISTS) {
+      GST_ERROR_OBJECT (self, "Failed to create directory for data: %s", error->message);
+      g_clear_object (&data_dir);
+    }
+    g_clear_error (&error);
+  }
+
+  /* When dir was present or created */
+  if (data_dir) {
+    GFile *art_file;
+    GOutputStream *ostream;
+    gchar name[11]; // uint + NULL
+
+    g_snprintf (name, sizeof (name), "%u", clapper_media_item_get_id (track->item));
+    art_file = g_file_get_child (data_dir, name);
+
+    if ((ostream = G_OUTPUT_STREAM (g_file_replace (art_file,
+        NULL, FALSE, G_FILE_CREATE_NONE, NULL, &error)))) {
+      GstBuffer *buffer = gst_sample_get_buffer (sample);
+      GstMemory *mem = gst_buffer_peek_memory (buffer, 0);
+      GstMapInfo map_info;
+
+      if (G_LIKELY (mem && gst_memory_map (mem, &map_info, GST_MAP_READ))) {
+        if (g_output_stream_write_all (ostream, map_info.data, map_info.size,
+            NULL, NULL, &error)) {
+          dest_uri = g_file_get_uri (art_file);
+        } else if (error) {
+          GST_ERROR_OBJECT (self, "Could write art image file, reason: %s",
+              GST_STR_NULL (error->message));
+          g_clear_error (&error);
+        }
+        gst_memory_unmap (mem, &map_info);
+      } else {
+        GST_ERROR_OBJECT (self, "Could not map image sample buffer for reading");
+      }
+
+      if (G_UNLIKELY (!g_output_stream_close (ostream, NULL, &error))) {
+        GST_ERROR_OBJECT (self, "Could not close file output stream, reason: %s",
+            GST_STR_NULL (error->message));
+        g_clear_error (&error);
+      }
+      g_object_unref (ostream);
+    } else if (error) {
+      GST_ERROR_OBJECT (self, "Could not open file for writing, reason: %s",
+          GST_STR_NULL (error->message));
+      g_clear_error (&error);
+    }
+
+    g_object_unref (art_file);
+    g_object_unref (data_dir);
+  }
+
+  if (dest_uri)
+    GST_DEBUG_OBJECT (self, "Unpacked image sample, URI: \"%s\"", dest_uri);
+
+  return dest_uri;
+}
+
 static GVariant *
 _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
 {
   GVariantBuilder builder;
   GVariant *variant;
   GstTagList *tags;
+  GstSample *sample = NULL;
   GstDateTime *dt_val;
   GDate *date_val;
   gchar **strv_val;
@@ -399,10 +534,26 @@ _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
         g_variant_new_double ((gdouble) uint_val / 100));
   }
 
+  /* When no art url yet, check image tag again. Use preview image as fallback.
+   * This refs sample, so we can unref tags and prepare URI afterwards. */
+  if (!track->art_url) {
+    if (!(sample = _get_image_sample (tags, GST_TAG_IMAGE)))
+      sample = _get_image_sample (tags, GST_TAG_PREVIEW_IMAGE);
+  }
+
   gst_tag_list_unref (tags);
 
-  /* TODO: Support image sample or per-item custom artwork */
-  if (self->fallback_art_url) {
+  /* Sample can only be present when no art url */
+  if (sample) {
+    track->art_url = _unpack_image_sample (self, track, sample);
+    gst_sample_unref (sample);
+  }
+
+  /* Use track art when available, otherwise user set art fallback */
+  if (track->art_url) {
+    g_variant_builder_add (&builder, "{sv}", "mpris:artUrl",
+        g_variant_new_string (track->art_url));
+  } else if (self->fallback_art_url) {
     g_variant_builder_add (&builder, "{sv}", "mpris:artUrl",
         g_variant_new_string (self->fallback_art_url));
   }
@@ -1525,43 +1676,10 @@ clapper_mpris_register (ClapperMpris *self)
 }
 
 static void
-clapper_mpris_set_own_name (ClapperMpris *self, const gchar *own_name)
+_on_registration_prop_changed (ClapperMpris *self)
 {
-  gboolean changed = g_set_str (&self->own_name, own_name);
-
-  if (!changed)
-    return;
-
   clapper_mpris_unregister (self);
-  if (self->own_name && self->identity && self->desktop_entry_set)
-    clapper_mpris_register (self);
-}
-
-static void
-clapper_mpris_set_identity (ClapperMpris *self, const gchar *identity)
-{
-  gboolean changed = g_set_str (&self->identity, identity);
-
-  if (!changed)
-    return;
-
-  clapper_mpris_unregister (self);
-  if (self->own_name && self->identity && self->desktop_entry_set)
-    clapper_mpris_register (self);
-}
-
-static void
-clapper_mpris_set_desktop_entry (ClapperMpris *self, const gchar *desktop_entry)
-{
-  gboolean changed = g_set_str (&self->desktop_entry, desktop_entry);
-
-  if (!changed && self->desktop_entry_set)
-    return;
-
-  self->desktop_entry_set = TRUE;
-
-  clapper_mpris_unregister (self);
-  if (self->own_name && self->identity && self->desktop_entry_set)
+  if (self->app_id && self->own_name && self->identity && self->desktop_entry_set)
     clapper_mpris_register (self);
 }
 
@@ -1658,6 +1776,7 @@ clapper_mpris_finalize (GObject *object)
   self->current_track = NULL;
   g_ptr_array_unref (self->tracks);
 
+  g_free (self->app_id);
   g_free (self->own_name);
   g_free (self->identity);
   g_free (self->desktop_entry);
@@ -1673,14 +1792,24 @@ clapper_mpris_set_property (GObject *object, guint prop_id,
   ClapperMpris *self = CLAPPER_MPRIS_CAST (object);
 
   switch (prop_id) {
+    case PROP_APP_ID:
+      if (g_set_str (&self->app_id, g_value_get_string (value)))
+        _on_registration_prop_changed (self);
+      break;
     case PROP_OWN_NAME:
-      clapper_mpris_set_own_name (self, g_value_get_string (value));
+      if (g_set_str (&self->own_name, g_value_get_string (value)))
+        _on_registration_prop_changed (self);
       break;
     case PROP_IDENTITY:
-      clapper_mpris_set_identity (self, g_value_get_string (value));
+      if (g_set_str (&self->identity, g_value_get_string (value)))
+        _on_registration_prop_changed (self);
       break;
     case PROP_DESKTOP_ENTRY:
-      clapper_mpris_set_desktop_entry (self, g_value_get_string (value));
+      if (g_set_str (&self->desktop_entry, g_value_get_string (value))
+          || !self->desktop_entry_set) { // On first set (can be NULL)
+        self->desktop_entry_set = TRUE;
+        _on_registration_prop_changed (self);
+      }
       break;
     case PROP_QUEUE_CONTROLLABLE:
       clapper_mpris_set_queue_controllable (self, g_value_get_boolean (value));
@@ -1701,6 +1830,9 @@ clapper_mpris_get_property (GObject *object, guint prop_id,
   ClapperMpris *self = CLAPPER_MPRIS_CAST (object);
 
   switch (prop_id) {
+    case PROP_APP_ID:
+      g_value_set_string (value, self->app_id);
+      break;
     case PROP_OWN_NAME:
       g_value_set_string (value, self->own_name);
       break;
@@ -1734,6 +1866,20 @@ clapper_mpris_class_init (ClapperMprisClass *klass)
   gobject_class->set_property = clapper_mpris_set_property;
   gobject_class->dispose = clapper_mpris_dispose;
   gobject_class->finalize = clapper_mpris_finalize;
+
+  /**
+   * ClapperMpris:app-id:
+   *
+   * The ID registered for your app (usually in reverse DNS format).
+   *
+   * This is used in order to store media artwork in an application
+   * specific directory that external MPRIS clients can access.
+   *
+   * Example: "com.example.MyApp"
+   */
+  param_specs[PROP_APP_ID] = g_param_spec_string ("app-id",
+      NULL, NULL, NULL,
+      G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS | CLAPPER_ENHANCER_PARAM_LOCAL);
 
   /**
    * ClapperMpris:own-name:

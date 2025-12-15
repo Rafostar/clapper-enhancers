@@ -31,6 +31,11 @@ clapper_mpris_gdbus = gnome.gdbus_codegen('clapper-mpris-gdbus',
   namespace: 'ClapperEnhancerMpris', # FIXME: 1.0: Rename to ClapperMpris
 )
 
+config_h = configuration_data()
+config_h.set_quoted('CLAPPER_API_NAME', clapper_api_name)
+
+configure_file(output: 'config.h', configuration: config_h)
+
 enhancer_plugin_template = 'clapper-mpris.plugin.in'
 
 enhancer_deps += [
