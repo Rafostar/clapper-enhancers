@@ -366,6 +366,9 @@ _unpack_image_sample (ClapperMpris *self, ClapperMprisTrack *track, GstSample *s
 
   GST_DEBUG_OBJECT (self, "Unpacking image sample...");
 
+  /* XXX: When item is moved between queues, item added message may arrive on
+   * 2nd bus before removed in the first one. Separate directory for each
+   * own name is thus needed, so we do not remove file after its created. */
   data_dir = g_file_new_build_filename (g_get_user_runtime_dir (),
       "app", self->app_id, CLAPPER_API_NAME, "enhancers", "clapper-mpris",
       self->own_name, NULL);
@@ -382,9 +385,13 @@ _unpack_image_sample (ClapperMpris *self, ClapperMprisTrack *track, GstSample *s
   if (data_dir) {
     GFile *art_file;
     GOutputStream *ostream;
-    gchar name[11]; // uint + NULL
+    gchar name[22]; // 2 * uint + "_" + NULL
 
-    g_snprintf (name, sizeof (name), "%u", clapper_media_item_get_id (track->item));
+    /* Some clients (e.g. GNOME Shell) cache generated artwork even
+     * after app is closed, so each file must have an unique name
+     * (unless it can be considered to be the exact same media item) */
+    g_snprintf (name, sizeof (name), "%u_%u", clapper_media_item_get_id (track->item),
+        g_str_hash (clapper_media_item_get_uri (track->item))); // no need to use redirect
     art_file = g_file_get_child (data_dir, name);
 
     if ((ostream = G_OUTPUT_STREAM (g_file_replace (art_file,
