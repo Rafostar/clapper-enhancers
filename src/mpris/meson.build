@@ -8,7 +8,7 @@ if not os_supported
   subdir_done()
 endif
 
-if not clapper_dep.found() or not clapper_dep.version().version_compare('>= 0.9.0')
+if not clapper_dep.found() or not clapper_dep.version().version_compare('>= 0.9.1')
   if enhancer_option.enabled()
     error('@0@ enhancer was enabled, but Clapper version requirement is not met'.format(name))
   endif
@@ -30,6 +30,11 @@ clapper_mpris_gdbus = gnome.gdbus_codegen('clapper-mpris-gdbus',
   interface_prefix: 'org.mpris.',
   namespace: 'ClapperEnhancerMpris', # FIXME: 1.0: Rename to ClapperMpris
 )
+
+config_h = configuration_data()
+config_h.set_quoted('CLAPPER_API_NAME', clapper_api_name)
+
+configure_file(output: 'config.h', configuration: config_h)
 
 enhancer_plugin_template = 'clapper-mpris.plugin.in'
 
