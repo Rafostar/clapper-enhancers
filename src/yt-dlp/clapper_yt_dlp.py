@@ -211,6 +211,10 @@ class ClapperYtDlp(*bases):
                 value.init(GObject.TYPE_UINT64)
                 value.set_uint64(val * Gst.SECOND)
                 harvest.tags_add(Gst.TAG_DURATION, value)
+            if (val := info.get('channel')):
+                harvest.tags_add(Gst.TAG_ARTIST, val)
+            if (val := info.get('description')):
+                harvest.tags_add(Gst.TAG_DESCRIPTION, val)
             if (val := info.get('chapters')):
                 for index, chap in enumerate(val):
                     title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
