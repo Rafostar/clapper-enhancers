@@ -8,6 +8,7 @@ enhancer_data += [
   'yt-dlp/clapper_yt_dlp_hls.py',
   'yt-dlp/clapper_yt_dlp_direct.py',
   'yt-dlp/clapper_yt_dlp_playlist.py',
+  'yt-dlp/clapper_yt_dlp_utils.py',
 ]
 
 # Enhancer code has Clapper version checks

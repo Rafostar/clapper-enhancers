@@ -37,6 +37,7 @@ import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
 import clapper_yt_dlp_playlist as playlist
+import clapper_yt_dlp_utils as utils
 
 # NOTE: GStreamer does not support mp3 and opus in HLS yet
 FORMAT_PREFERENCE = '/'.join([
@@ -219,6 +220,8 @@ class ClapperYtDlp(*bases):
                 for index, chap in enumerate(val):
                     title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
                     harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
+            if (th := info.get('thumbnails')) and (val := utils.fetch_image_sample(th, cancellable)):
+                harvest.tags_add(Gst.TAG_PREVIEW_IMAGE, val)
 
             # Find and merge headers for requested formats
             req_headers = {}
