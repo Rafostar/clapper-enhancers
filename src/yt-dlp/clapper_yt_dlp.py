@@ -216,6 +216,9 @@ class ClapperYtDlp(*bases):
                 harvest.tags_add(Gst.TAG_ARTIST, val)
             if (val := info.get('description')):
                 harvest.tags_add(Gst.TAG_DESCRIPTION, val)
+            if (cats := info.get('categories')):
+                for val in cats:
+                    harvest.tags_add(Gst.TAG_GENRE, val)
             if (val := info.get('chapters')):
                 for index, chap in enumerate(val):
                     title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
