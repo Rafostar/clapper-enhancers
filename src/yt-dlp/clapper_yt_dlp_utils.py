@@ -26,11 +26,9 @@ from gi.repository import GLib, GObject, Gio, Gst, GstTag, Clapper
 
 import clapper_yt_dlp_debug as debug
 
-def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
+def _find_best_thumbnail(thumbnails):
     best = None
     best_area = 0
-
-    debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetching image data...')
 
     for t in thumbnails:
         width = t.get('width') or 0
@@ -40,8 +38,14 @@ def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
             best = t
             best_area = area
 
-    if not best:
+    return best
+
+def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
+    if not (best := _find_best_thumbnail(thumbnails)):
+        debug.print_leveled(Gst.DebugLevel.INFO, 'No preview image found')
         return None
+
+    debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetching image data...')
 
     file = Gio.File.new_for_uri(best['url'])
     gbytes = None
@@ -119,5 +123,12 @@ def playlist_item_add_tags(item: Clapper.MediaItem, entry):
         tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_DURATION, value)
     if (val := entry.get('channel')):
         tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_ARTIST, val)
+    if (th := entry.get('thumbnails')) and (best := _find_best_thumbnail(th)):
+        # GStreamer supports "text/uri-list" as image sample
+        # (see gst_tag_image_data_to_image_sample docs), so
+        # lets avoid fetching image for each playlist item here
+        data = best['url'].encode('utf-8')
+        if (val := GstTag.tag_image_data_to_image_sample(data, GstTag.TagImageType.NONE)):
+            tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_PREVIEW_IMAGE, val)
 
     item.populate_tags(tags)
