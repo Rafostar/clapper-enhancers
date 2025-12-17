@@ -126,5 +126,7 @@ def playlist_item_add_tags(item: Clapper.MediaItem, entry):
         value.init(GObject.TYPE_UINT64)
         value.set_uint64(val * Gst.SECOND)
         tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_DURATION, value)
+    if (val := entry.get('channel')):
+        tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_ARTIST, val)
 
     item.populate_tags(tags)
