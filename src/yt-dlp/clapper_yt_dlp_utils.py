@@ -15,15 +15,17 @@
 # License along with this library; if not, see
 # <https://www.gnu.org/licenses/>.
 
-import os, gi
+import os, json, gi
 gi.require_version('GLib', '2.0')
+gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('Gst', '1.0')
-from gi.repository import GLib, Gio, Gst
+gi.require_version('Clapper', '0.0')
+from gi.repository import GLib, GObject, Gio, Gst, Clapper
 
 import clapper_yt_dlp_debug as debug
 
-def fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
+def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
     best = None
     best_ext = None
     best_area = 1
@@ -72,3 +74,42 @@ def fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
     caps.set_value('height', best['height'])
 
     return Gst.Sample.new(buffer, caps, None, None)
+
+def harvest_add_item_data(harvest: Clapper.Harvest, info, cancellable: Gio.Cancellable):
+    # Add tags
+    if (val := info.get('title')):
+        harvest.tags_add(Gst.TAG_TITLE, val)
+    if (val := info.get('duration')):
+        value = GObject.Value()
+        value.init(GObject.TYPE_UINT64)
+        value.set_uint64(val * Gst.SECOND)
+        harvest.tags_add(Gst.TAG_DURATION, value)
+    if (val := info.get('channel')):
+        harvest.tags_add(Gst.TAG_ARTIST, val)
+    if (val := info.get('description')):
+        harvest.tags_add(Gst.TAG_DESCRIPTION, val)
+    if (cats := info.get('categories')):
+        [harvest.tags_add(Gst.TAG_GENRE, val) for val in cats]
+    if (th := info.get('thumbnails')) and (val := _fetch_image_sample(th, cancellable)):
+        harvest.tags_add(Gst.TAG_PREVIEW_IMAGE, val)
+
+    # Add TOC
+    if (val := info.get('chapters')):
+        for index, chap in enumerate(val):
+            title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
+            harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
+
+    # Find and merge headers for requested formats, then add them
+    req_headers = {}
+    if (req_formats := info.get('requested_formats') or info.get('requested_downloads')):
+        for fmt in req_formats:
+            if (hdrs := fmt.get('http_headers')):
+                req_headers.update(hdrs)
+    if (hdrs := info.get('http_headers')):
+        req_headers.update(hdrs)
+
+    if debug.level >= Gst.DebugLevel.DEBUG:
+        json_str = json.dumps(req_headers, indent=4)
+        debug.print_leveled(Gst.DebugLevel.DEBUG, f'Merged HTTP headers: {json_str}')
+
+    [harvest.headers_set(key, val) for key, val in req_headers.items()]
