@@ -20,32 +20,24 @@ gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('Gst', '1.0')
+gi.require_version('GstTag', '1.0')
 gi.require_version('Clapper', '0.0')
-from gi.repository import GLib, GObject, Gio, Gst, Clapper
+from gi.repository import GLib, GObject, Gio, Gst, GstTag, Clapper
 
 import clapper_yt_dlp_debug as debug
 
 def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
     best = None
-    best_ext = None
-    best_area = 1
+    best_area = 0
 
-    debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetching image sample...')
+    debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetching image data...')
 
     for t in thumbnails:
         width = t.get('width') or 0
         height = t.get('height') or 0
 
-        if (area := width * height) < best_area or not (url := t.get('url')):
-            continue
-
-        ext = os.path.splitext(url.split('?')[0])[1][1:].lower()
-        ext = {'jpg': 'jpeg'}.get(ext, ext)
-
-        # Extensions for "image/" caps
-        if ext in ['jpeg', 'webp', 'png']:
+        if (area := width * height) > best_area and (url := t.get('url')):
             best = t
-            best_ext = ext
             best_area = area
 
     if not best:
@@ -65,15 +57,14 @@ def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
         debug.print_leveled(Gst.DebugLevel.ERROR, 'Fetched thumbnail is empty')
         return None
 
-    debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetched image sample')
+    debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetched image data')
 
-    buffer = Gst.Buffer.new_wrapped_bytes(gbytes)
+    # According to GStreamer docs, for preview images "NONE" image type should be used
+    sample = GstTag.tag_image_data_to_image_sample(gbytes.get_data(), GstTag.TagImageType.NONE)
+    if not sample:
+        debug.print_leveled(Gst.DebugLevel.ERROR, 'Could not generate image sample from data')
 
-    caps = Gst.Caps.new_empty_simple(f'image/{best_ext}')
-    caps.set_value('width', best['width'])
-    caps.set_value('height', best['height'])
-
-    return Gst.Sample.new(buffer, caps, None, None)
+    return sample
 
 def harvest_add_item_data(harvest: Clapper.Harvest, info, cancellable: Gio.Cancellable):
     # Add tags
