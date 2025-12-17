@@ -229,18 +229,7 @@ class ClapperYtDlp(*bases):
                 continue
 
             item = Clapper.MediaItem(uri=entry['url'])
-            tags = Gst.TagList.new_empty()
-            tags.set_scope(Gst.TagScope.GLOBAL)
-
-            if (val := entry.get('title')):
-                tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_TITLE, val)
-            if (val := entry.get('duration')):
-                value = GObject.Value()
-                value.init(GObject.TYPE_UINT64)
-                value.set_uint64(val * Gst.SECOND)
-                tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_DURATION, value)
-
-            item.populate_tags(tags)
+            utils.playlist_item_add_tags(item, entry)
             plist.append(item)
 
         return True

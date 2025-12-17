@@ -113,3 +113,18 @@ def harvest_add_item_data(harvest: Clapper.Harvest, info, cancellable: Gio.Cance
         debug.print_leveled(Gst.DebugLevel.DEBUG, f'Merged HTTP headers: {json_str}')
 
     [harvest.headers_set(key, val) for key, val in req_headers.items()]
+
+def playlist_item_add_tags(item: Clapper.MediaItem, entry):
+    tags = Gst.TagList.new_empty()
+    tags.set_scope(Gst.TagScope.GLOBAL)
+
+    # Add tags useful for a queued item (before playback)
+    if (val := entry.get('title')):
+        tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_TITLE, val)
+    if (val := entry.get('duration')):
+        value = GObject.Value()
+        value.init(GObject.TYPE_UINT64)
+        value.set_uint64(val * Gst.SECOND)
+        tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_DURATION, value)
+
+    item.populate_tags(tags)
