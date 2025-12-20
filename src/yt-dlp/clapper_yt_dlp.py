@@ -37,6 +37,7 @@ import clapper_yt_dlp_dash as dash
 import clapper_yt_dlp_hls as hls
 import clapper_yt_dlp_direct as direct
 import clapper_yt_dlp_playlist as playlist
+import clapper_yt_dlp_utils as utils
 
 # NOTE: GStreamer does not support mp3 and opus in HLS yet
 FORMAT_PREFERENCE = '/'.join([
@@ -204,32 +205,9 @@ class ClapperYtDlp(*bases):
         harvest.fill_with_text(media_type, manifest)
 
         if not is_playlist:
-            if (val := info.get('title')):
-                harvest.tags_add(Gst.TAG_TITLE, val)
-            if (val := info.get('duration')):
-                value = GObject.Value()
-                value.init(GObject.TYPE_UINT64)
-                value.set_uint64(val * Gst.SECOND)
-                harvest.tags_add(Gst.TAG_DURATION, value)
-            if (val := info.get('chapters')):
-                for index, chap in enumerate(val):
-                    title, start, end = chap.get('title'), chap.get('start_time'), chap.get('end_time')
-                    harvest.toc_add(Gst.TocEntryType.CHAPTER, title, start, end)
-
-            # Find and merge headers for requested formats
-            req_headers = {}
-            if (req_formats := info.get('requested_formats') or info.get('requested_downloads')):
-                for fmt in req_formats:
-                    if (hdrs := fmt.get('http_headers')):
-                        req_headers.update(hdrs)
-            if (hdrs := info.get('http_headers')):
-                req_headers.update(hdrs)
-
-            if debug.level >= Gst.DebugLevel.DEBUG:
-                json_str = json.dumps(req_headers, indent=4)
-                debug.print_leveled(Gst.DebugLevel.DEBUG, f'Merged HTTP headers: {json_str}')
-
-            [harvest.headers_set(key, val) for key, val in req_headers.items()]
+            utils.harvest_add_item_data(harvest, info, cancellable)
+            if cancellable.is_cancelled():
+                return False
 
         if Clapper.MINOR_VERSION >= 9 and not info.get('is_live'):
             harvest.set_expiration_seconds(EXPIRATIONS.get(extractor_name, EXPIRATIONS['default']))
@@ -251,18 +229,7 @@ class ClapperYtDlp(*bases):
                 continue
 
             item = Clapper.MediaItem(uri=entry['url'])
-            tags = Gst.TagList.new_empty()
-            tags.set_scope(Gst.TagScope.GLOBAL)
-
-            if (val := entry.get('title')):
-                tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_TITLE, val)
-            if (val := entry.get('duration')):
-                value = GObject.Value()
-                value.init(GObject.TYPE_UINT64)
-                value.set_uint64(val * Gst.SECOND)
-                tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_DURATION, value)
-
-            item.populate_tags(tags)
+            utils.playlist_item_add_tags(item, entry)
             plist.append(item)
 
         return True

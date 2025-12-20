@@ -157,7 +157,9 @@ typedef struct
 {
   gchar *id;
   ClapperMediaItem *item;
+  GstSample *art_sample;
   gchar *art_url;
+  gboolean art_from_data;
 } ClapperMprisTrack;
 
 struct _ClapperMpris
@@ -221,11 +223,21 @@ clapper_mpris_track_new (ClapperMediaItem *item)
       clapper_media_item_get_id (item));
 
   track->item = gst_object_ref (item);
+  track->art_sample = NULL;
   track->art_url = NULL;
+  track->art_from_data = FALSE;
 
   GST_TRACE ("Created track: %s", track->id);
 
   return track;
+}
+
+static inline void
+_delete_art_data (ClapperMprisTrack *track)
+{
+  GFile *file = g_file_new_for_uri (track->art_url);
+  g_file_delete (file, NULL, NULL);
+  g_object_unref (file);
 }
 
 static void
@@ -233,15 +245,14 @@ clapper_mpris_track_free (ClapperMprisTrack *track)
 {
   GST_TRACE ("Freeing track: %s", track->id);
 
+  /* XXX: Must call before freeing art url */
+  if (track->art_from_data)
+    _delete_art_data (track);
+
   g_free (track->id);
   gst_object_unref (track->item);
-
-  if (track->art_url) {
-    GFile *file = g_file_new_for_uri (track->art_url);
-    g_file_delete (file, NULL, NULL);
-    g_object_unref (file);
-    g_free (track->art_url);
-  }
+  gst_clear_sample (&track->art_sample);
+  g_free (track->art_url);
 
   g_free (track);
 }
@@ -317,15 +328,17 @@ _get_image_sample (GstTagList *tags, const gchar *tag)
   for (i = 0; i < n_tags; ++i) {
     GstSample *next_sample;
     GstStructure *next_structure;
+    const gchar *next_type;
 
     /* Amount of tags was checked, so success is expected */
     if (G_UNLIKELY (!gst_tag_list_get_sample_index (tags, tag, i, &next_sample)))
       continue;
 
     next_structure = gst_caps_get_structure (gst_sample_get_caps (next_sample), 0);
+    next_type = gst_structure_get_name (next_structure);
 
     /* Check for compatible media type */
-    if (!g_str_has_prefix (gst_structure_get_name (next_structure), "image/")) {
+    if (!g_str_has_prefix (next_type, "image/") && strcmp (next_type, "text/uri-list") != 0) {
       gst_sample_unref (next_sample);
       continue;
     }
@@ -344,7 +357,8 @@ _get_image_sample (GstTagList *tags, const gchar *tag)
           "width", G_TYPE_INT, &next_width,
           "height", G_TYPE_INT, &next_height, NULL);
 
-      /* Better if higher resolution */
+      /* Better if higher resolution. Note that in URI case, resolution is usually
+       * not present, thus image data is selected (which is what we prefer) */
       if (next_width * next_height > width * height) {
         gst_sample_unref (sample);
         sample = next_sample;
@@ -357,83 +371,137 @@ _get_image_sample (GstTagList *tags, const gchar *tag)
   return sample;
 }
 
-static gchar *
-_unpack_image_sample (ClapperMpris *self, ClapperMprisTrack *track, GstSample *sample)
+static void
+_track_take_art_sample (ClapperMpris *self, ClapperMprisTrack *track, GstSample *sample)
 {
-  GFile *data_dir;
-  GError *error = NULL;
-  gchar *dest_uri = NULL;
+  GstStructure *structure;
+  const gchar *media_type;
 
-  GST_DEBUG_OBJECT (self, "Unpacking image sample...");
-
-  /* XXX: When item is moved between queues, item added message may arrive on
-   * 2nd bus before removed in the first one. Separate directory for each
-   * own name is thus needed, so we do not remove file after its created. */
-  data_dir = g_file_new_build_filename (g_get_user_runtime_dir (),
-      "app", self->app_id, CLAPPER_API_NAME, "enhancers", "clapper-mpris",
-      self->own_name, NULL);
-
-  if (!g_file_make_directory_with_parents (data_dir, NULL, &error)) {
-    if (error->domain != G_IO_ERROR || error->code != G_IO_ERROR_EXISTS) {
-      GST_ERROR_OBJECT (self, "Failed to create directory for data: %s", error->message);
-      g_clear_object (&data_dir);
-    }
-    g_clear_error (&error);
+  /* Delete outdated artwork data first,
+   * then free the art url */
+  if (track->art_from_data) {
+    _delete_art_data (track);
+    track->art_from_data = FALSE;
   }
+  g_clear_pointer (&track->art_url, g_free);
 
-  /* When dir was present or created */
-  if (data_dir) {
-    GFile *art_file;
-    GOutputStream *ostream;
-    gchar name[22]; // 2 * uint + "_" + NULL
+  /* Replace stored sample */
+  gst_clear_sample (&track->art_sample);
+  track->art_sample = sample;
 
-    /* Some clients (e.g. GNOME Shell) cache generated artwork even
-     * after app is closed, so each file must have an unique name
-     * (unless it can be considered to be the exact same media item) */
-    g_snprintf (name, sizeof (name), "%u_%u", clapper_media_item_get_id (track->item),
-        g_str_hash (clapper_media_item_get_uri (track->item))); // no need to use redirect
-    art_file = g_file_get_child (data_dir, name);
+  /* After above cleanup, regenerate art url */
+  GST_DEBUG_OBJECT (self, "Unpacking art sample...");
 
-    if ((ostream = G_OUTPUT_STREAM (g_file_replace (art_file,
-        NULL, FALSE, G_FILE_CREATE_NONE, NULL, &error)))) {
-      GstBuffer *buffer = gst_sample_get_buffer (sample);
-      GstMemory *mem = gst_buffer_peek_memory (buffer, 0);
-      GstMapInfo map_info;
+  structure = gst_caps_get_structure (gst_sample_get_caps (track->art_sample), 0);
+  media_type = gst_structure_get_name (structure);
 
-      if (G_LIKELY (mem && gst_memory_map (mem, &map_info, GST_MAP_READ))) {
-        if (g_output_stream_write_all (ostream, map_info.data, map_info.size,
-            NULL, NULL, &error)) {
-          dest_uri = g_file_get_uri (art_file);
-        } else if (error) {
-          GST_ERROR_OBJECT (self, "Could write art image file, reason: %s",
-              GST_STR_NULL (error->message));
-          g_clear_error (&error);
-        }
-        gst_memory_unmap (mem, &map_info);
-      } else {
-        GST_ERROR_OBJECT (self, "Could not map image sample buffer for reading");
+  if (g_str_has_prefix (media_type, "image/")) {
+    GFile *data_dir;
+    GError *error = NULL;
+
+    GST_DEBUG_OBJECT (self, "Sample stores image data");
+
+    /* XXX: When item is moved between queues, item added message may arrive on
+     * 2nd bus before removed in the first one. Separate directory for each
+     * own name is thus needed, so we do not remove file after its created. */
+    data_dir = g_file_new_build_filename (g_get_user_runtime_dir (),
+        "app", self->app_id, CLAPPER_API_NAME, "enhancers", "clapper-mpris",
+        self->own_name, NULL);
+
+    if (!g_file_make_directory_with_parents (data_dir, NULL, &error)) {
+      if (error->domain != G_IO_ERROR || error->code != G_IO_ERROR_EXISTS) {
+        GST_ERROR_OBJECT (self, "Failed to create directory for data: %s", error->message);
+        g_clear_object (&data_dir);
       }
-
-      if (G_UNLIKELY (!g_output_stream_close (ostream, NULL, &error))) {
-        GST_ERROR_OBJECT (self, "Could not close file output stream, reason: %s",
-            GST_STR_NULL (error->message));
-        g_clear_error (&error);
-      }
-      g_object_unref (ostream);
-    } else if (error) {
-      GST_ERROR_OBJECT (self, "Could not open file for writing, reason: %s",
-          GST_STR_NULL (error->message));
       g_clear_error (&error);
     }
 
-    g_object_unref (art_file);
-    g_object_unref (data_dir);
+    /* When dir was present or created */
+    if (data_dir) {
+      GFile *art_file;
+      GOutputStream *ostream;
+      gchar name[22]; // 2 * uint + "_" + NULL
+
+      /* Some clients (e.g. GNOME Shell) cache generated artwork even
+       * after app is closed, so each file must have an unique name
+       * (unless it can be considered to be the exact same media item) */
+      g_snprintf (name, sizeof (name), "%u_%u", clapper_media_item_get_id (track->item),
+          g_str_hash (clapper_media_item_get_uri (track->item))); // no need to use redirect
+      art_file = g_file_get_child (data_dir, name);
+
+      if ((ostream = G_OUTPUT_STREAM (g_file_replace (art_file,
+          NULL, FALSE, G_FILE_CREATE_NONE, NULL, &error)))) {
+        GstBuffer *buffer = gst_sample_get_buffer (track->art_sample);
+        GstMemory *mem = gst_buffer_peek_memory (buffer, 0);
+        GstMapInfo map_info;
+
+        if (G_LIKELY (mem && gst_memory_map (mem, &map_info, GST_MAP_READ))) {
+          if (g_output_stream_write_all (ostream, map_info.data, map_info.size,
+              NULL, NULL, &error)) {
+            track->art_url = g_file_get_uri (art_file);
+            if (G_LIKELY (track->art_url != NULL))
+              track->art_from_data = TRUE;
+          } else if (error) {
+            GST_ERROR_OBJECT (self, "Could write art image file, reason: %s",
+                GST_STR_NULL (error->message));
+            g_clear_error (&error);
+          }
+          gst_memory_unmap (mem, &map_info);
+        } else {
+          GST_ERROR_OBJECT (self, "Could not map image sample buffer for reading");
+        }
+
+        if (G_UNLIKELY (!g_output_stream_close (ostream, NULL, &error))) {
+          GST_ERROR_OBJECT (self, "Could not close file output stream, reason: %s",
+              GST_STR_NULL (error->message));
+          g_clear_error (&error);
+        }
+        g_object_unref (ostream);
+      } else if (error) {
+        GST_ERROR_OBJECT (self, "Could not open file for writing, reason: %s",
+            GST_STR_NULL (error->message));
+        g_clear_error (&error);
+      }
+
+      g_object_unref (art_file);
+      g_object_unref (data_dir);
+    }
+  } else if (strcmp (media_type, "text/uri-list") == 0) {
+    GstBuffer *buffer = gst_sample_get_buffer (track->art_sample);
+    GstMemory *mem = gst_buffer_peek_memory (buffer, 0);
+    GstMapInfo map_info;
+
+    if (G_LIKELY (mem && gst_memory_map (mem, &map_info, GST_MAP_READ))) {
+      /* Fast path for only single URI (usually) */
+      if (!memchr (map_info.data, '\n', map_info.size)
+          && !memchr (map_info.data, '\r', map_info.size)) {
+        GST_DEBUG_OBJECT (self, "Sample stores single image URI");
+        track->art_url = g_strndup ((const gchar *) map_info.data, map_info.size);
+      } else {
+        gchar **uris;
+
+        GST_DEBUG_OBJECT (self, "Sample stores one or more image URIs");
+
+        /* Safety - check for NULL termination within data */
+        if (memchr (map_info.data, '\0', map_info.size)) {
+          uris = g_uri_list_extract_uris ((const gchar *) map_info.data);
+        } else {
+          gchar *text = g_strndup ((const gchar *) map_info.data, map_info.size);
+          uris = g_uri_list_extract_uris (text);
+          g_free (text);
+        }
+
+        if (uris && uris[0])
+          track->art_url = g_strdup (uris[0]);
+
+        g_strfreev (uris);
+      }
+      gst_memory_unmap (mem, &map_info);
+    }
   }
 
-  if (dest_uri)
-    GST_DEBUG_OBJECT (self, "Unpacked image sample, URI: \"%s\"", dest_uri);
-
-  return dest_uri;
+  GST_DEBUG_OBJECT (self, "Updated art sample, URI: \"%s\"",
+      GST_STR_NULL (track->art_url));
 }
 
 static GVariant *
@@ -543,17 +611,16 @@ _mpris_build_track_metadata (ClapperMpris *self, ClapperMprisTrack *track)
 
   /* When no art url yet, check image tag again. Use preview image as fallback.
    * This refs sample, so we can unref tags and prepare URI afterwards. */
-  if (!track->art_url) {
-    if (!(sample = _get_image_sample (tags, GST_TAG_IMAGE)))
-      sample = _get_image_sample (tags, GST_TAG_PREVIEW_IMAGE);
-  }
+  if (!(sample = _get_image_sample (tags, GST_TAG_IMAGE)))
+    sample = _get_image_sample (tags, GST_TAG_PREVIEW_IMAGE);
 
   gst_tag_list_unref (tags);
 
-  /* Sample can only be present when no art url */
   if (sample) {
-    track->art_url = _unpack_image_sample (self, track, sample);
-    gst_sample_unref (sample);
+    if (track->art_sample != sample)
+      _track_take_art_sample (self, track, sample);
+    else
+      gst_sample_unref (sample);
   }
 
   /* Use track art when available, otherwise user set art fallback */
