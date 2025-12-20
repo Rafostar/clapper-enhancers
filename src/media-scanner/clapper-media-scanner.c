@@ -47,6 +47,7 @@ struct _ClapperMediaScanner
   /* Used from scanner thread */
   gboolean running;
   GstTagList *collected_tags;
+  gboolean stream_tags_allowed;
 
   /* Used with a mutex lock */
   GSource *timeout_source;
@@ -122,6 +123,7 @@ _scan_next_item (ClapperMediaScanner *self)
   uri = clapper_media_item_get_uri (item);
   GST_DEBUG_OBJECT (self, "Starting scan of %" GST_PTR_FORMAT "(%s)", item, uri);
 
+  self->stream_tags_allowed = FALSE;
   gst_tag_list_take (&self->collected_tags, gst_tag_list_new_empty ());
   gst_tag_list_set_scope (self->collected_tags, GST_TAG_SCOPE_GLOBAL);
   g_object_set (self->urisourcebin, "uri", uri, NULL);
@@ -338,13 +340,47 @@ _handle_tag_msg (GstMessage *msg, ClapperMediaScanner *self)
 
   gst_message_parse_tag (msg, &tags);
 
+  /* Global tags are always prioritized.
+   * Only use stream tags as fallback when allowed. */
   if (gst_tag_list_get_scope (tags) == GST_TAG_SCOPE_GLOBAL) {
     GST_LOG_OBJECT (self, "Got GLOBAL tags from element: %s: %" GST_PTR_FORMAT,
         GST_OBJECT_NAME (src), tags);
     gst_tag_list_insert (self->collected_tags, tags, GST_TAG_MERGE_REPLACE);
+  } else if (self->stream_tags_allowed) {
+    GST_LOG_OBJECT (self, "Got STREAM tags from element: %s: %" GST_PTR_FORMAT,
+        GST_OBJECT_NAME (src), tags);
+    gst_tag_list_insert (self->collected_tags, tags, GST_TAG_MERGE_KEEP);
   }
 
   gst_tag_list_unref (tags);
+}
+
+static inline void
+_handle_stream_collection_msg (GstMessage *msg, ClapperMediaScanner *self)
+{
+  GstStreamCollection *collection = NULL;
+  guint i, n_streams, n_video = 0, n_audio = 0, n_text = 0;
+
+  GST_DEBUG_OBJECT (self, "Stream collection");
+
+  gst_message_parse_stream_collection (msg, &collection);
+  n_streams = gst_stream_collection_get_size (collection);
+
+  for (i = 0; i < n_streams; ++i) {
+    GstStream *stream = gst_stream_collection_get_stream (collection, i);
+    GstStreamType stream_type = gst_stream_get_stream_type (stream);
+
+    if ((stream_type & GST_STREAM_TYPE_VIDEO) == GST_STREAM_TYPE_VIDEO)
+      n_video++;
+    else if ((stream_type & GST_STREAM_TYPE_AUDIO) == GST_STREAM_TYPE_AUDIO)
+      n_audio++;
+    else if ((stream_type & GST_STREAM_TYPE_TEXT) == GST_STREAM_TYPE_TEXT)
+      n_text++;
+  }
+  gst_object_unref (collection);
+
+  self->stream_tags_allowed = (n_video + n_audio + n_text == 1);
+  GST_DEBUG_OBJECT (self, "Stream tags allowed: %s", (self->stream_tags_allowed) ? "yes" : "no");
 }
 
 static inline void
@@ -411,6 +447,9 @@ _bus_message_func (GstBus *bus, GstMessage *msg, ClapperMediaScanner *self)
       break;
     case GST_MESSAGE_TAG:
       _handle_tag_msg (msg, self);
+      break;
+    case GST_MESSAGE_STREAM_COLLECTION:
+      _handle_stream_collection_msg (msg, self);
       break;
     case GST_MESSAGE_ASYNC_DONE:
       _handle_async_done_msg (msg, self);
