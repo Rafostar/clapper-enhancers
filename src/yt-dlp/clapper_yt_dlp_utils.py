@@ -15,7 +15,7 @@
 # License along with this library; if not, see
 # <https://www.gnu.org/licenses/>.
 
-import os, json, gi
+import os, time, json, gi
 gi.require_version('GLib', '2.0')
 gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
@@ -132,3 +132,22 @@ def playlist_item_add_tags(item: Clapper.MediaItem, entry):
             tags.add_value(Gst.TagMergeMode.REPLACE, Gst.TAG_PREVIEW_IMAGE, val)
 
     item.populate_tags(tags)
+
+def await_availability(info, cancellable: Gio.Cancellable):
+    available_at = 0
+    if (req_formats := info.get('requested_formats') or info.get('requested_downloads')):
+        for fmt in req_formats:
+            if (aval_at := fmt.get('available_at')) and aval_at > available_at:
+                available_at = aval_at
+    # yt-dlp uses "time" module internally so our timers should match
+    if available_at > 0 and (now := time.time()) < available_at:
+        debug.print_leveled(Gst.DebugLevel.INFO, f'Awaiting access, available in {available_at - now:.3f}s...')
+        while True:
+            time.sleep(0.25)
+            if cancellable.is_cancelled():
+                return False
+            if (now := time.time()) >= available_at:
+                debug.print_leveled(Gst.DebugLevel.INFO, f'Content is now accessible')
+                break
+
+    return True

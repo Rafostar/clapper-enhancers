@@ -212,6 +212,10 @@ class ClapperYtDlp(*bases):
         if Clapper.MINOR_VERSION >= 9 and not info.get('is_live'):
             harvest.set_expiration_seconds(EXPIRATIONS.get(extractor_name, EXPIRATIONS['default']))
 
+        # Wait until available
+        if not utils.await_availability(info, cancellable):
+            return False
+
         return True
 
     def do_parse(self, uri: GLib.Uri, gbytes: GLib.Bytes, plist: Gio.ListStore, cancellable: Gio.Cancellable):
