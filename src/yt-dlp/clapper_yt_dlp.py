@@ -75,6 +75,12 @@ EXPIRATIONS = {
 }
 
 # Clapper 0.8 compat
+def _check_harvest_uri_demuxer():
+    found = Gst.Registry.get().lookup_feature('clapperharvesturidemux') is not None
+    status = 'found' if found else 'missing'
+    debug.print_leveled(Gst.DebugLevel.INFO, f'Harvest URI demuxer is {status}')
+    return found
+
 bases = (GObject.Object, Clapper.Extractable)
 if Clapper.MINOR_VERSION >= 9:
     bases += (Clapper.Playlistable,)
@@ -188,7 +194,7 @@ class ClapperYtDlp(*bases):
         elif (manifest := dash.generate_manifest(info)):
             media_type = 'application/dash+xml'
         elif (manifest := direct.generate_manifest(info)):
-            media_type = 'text/x-uri'
+            media_type = 'text/x-uri' if _check_harvest_uri_demuxer() else 'text/uri-list'
         elif (manifest := playlist.generate_manifest(info)):
             media_type = 'application/clapper-playlist'
             is_playlist = True
