@@ -79,12 +79,14 @@ def harvest_add_item_data(harvest: Clapper.Harvest, info, cancellable: Gio.Cance
         value.init(GObject.TYPE_UINT64)
         value.set_uint64(val * Gst.SECOND)
         harvest.tags_add(Gst.TAG_DURATION, value)
-    if (val := info.get('channel')):
+    if (val := info.get('channel')) or (val := info.get('uploader')):
         harvest.tags_add(Gst.TAG_ARTIST, val)
     if (val := info.get('description')):
         harvest.tags_add(Gst.TAG_DESCRIPTION, val)
-    if (cats := info.get('categories')):
-        [harvest.tags_add(Gst.TAG_GENRE, val) for val in cats]
+    if (genres := info.get('genres')) or (genres := info.get('categories')):
+        [harvest.tags_add(Gst.TAG_GENRE, val) for val in genres]
+    elif (val := info.get('genre')):
+        harvest.tags_add(Gst.TAG_GENRE, val)
     if (th := info.get('thumbnails')) and (val := _fetch_image_sample(th, cancellable)):
         harvest.tags_add(Gst.TAG_PREVIEW_IMAGE, val)
 
