@@ -57,6 +57,22 @@ struct _ClapperLbry
   gchar *streaming_url;
 };
 
+/* TODO: Remove in future (Clapper 0.8 compat) */
+static gboolean
+_check_harvest_uri_demuxer (void)
+{
+  GstRegistry *registry = gst_registry_get ();
+  GstPluginFeature *feature = gst_registry_lookup_feature (registry, "clapperharvesturidemux");
+  gboolean found;
+
+  found = (feature != NULL);
+  gst_clear_object (&feature);
+
+  GST_INFO ("Harvest URI demuxer is %s", (found) ? "found" : "missing");
+
+  return found;
+}
+
 static inline SoupMessage *
 _make_api_message (ClapperLbry *self, LbryStep step)
 {
@@ -114,6 +130,8 @@ static gboolean
 _fill_harvest (ClapperLbry *self, JsonReader *reader, ClapperHarvest *harvest,
     GCancellable *cancellable, GError **error)
 {
+  const gchar *media_type;
+
   GST_DEBUG_OBJECT (self, "Harvesting...");
 
   if (gst_debug_category_get_threshold (GST_CAT_DEFAULT) >= GST_LEVEL_LOG) {
@@ -141,9 +159,11 @@ _fill_harvest (ClapperLbry *self, JsonReader *reader, ClapperHarvest *harvest,
       "Referer", "https://odysee.com/",
       NULL);
 
+  /* TODO: Use only "text/x-uri" when Clapper 0.8 support is dropped */
+  media_type = (_check_harvest_uri_demuxer ()) ? "text/x-uri" : "text/uri-list";
+
   /* Harvest takes data (transfer full) */
-  clapper_harvest_fill_with_text (harvest, "text/x-uri", self->streaming_url);
-  self->streaming_url = NULL; // safety
+  clapper_harvest_fill_with_text (harvest, media_type, g_steal_pointer (&self->streaming_url));
 
   GST_DEBUG_OBJECT (self, "Harvest done");
 
