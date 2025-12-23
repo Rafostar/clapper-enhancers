@@ -1,5 +1,5 @@
 project('clapper-enhancers', 'c',
-  version: '0.9.0',
+  version: '0.10.0',
   meson_version: '>= 0.64.0',
   license: 'LGPL-2.1-or-later',
   default_options: [
