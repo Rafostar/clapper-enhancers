@@ -46,6 +46,22 @@ struct _ClapperPeertube
   SoupSession *session;
 };
 
+/* TODO: Remove in future (Clapper 0.8 compat) */
+static gboolean
+_check_harvest_uri_demuxer (void)
+{
+  GstRegistry *registry = gst_registry_get ();
+  GstPluginFeature *feature = gst_registry_lookup_feature (registry, "clapperharvesturidemux");
+  gboolean found;
+
+  found = (feature != NULL);
+  gst_clear_object (&feature);
+
+  GST_INFO ("Harvest URI demuxer is %s", (found) ? "found" : "missing");
+
+  return found;
+}
+
 static inline SoupMessage *
 _make_api_message (ClapperPeertube *self, GUri *uri, const gchar *video_id)
 {
@@ -78,8 +94,11 @@ _read_uris_array_cb (JsonReader *reader, ClapperHarvest *harvest, const gchar *k
   const gchar *uri;
   gboolean filled = FALSE;
 
-  if ((uri = json_utils_get_string (reader, key_str, NULL)))
-    filled = clapper_harvest_fill_with_text (harvest, "text/x-uri", g_strdup (uri));
+  if ((uri = json_utils_get_string (reader, key_str, NULL))) {
+    /* TODO: Use only "text/x-uri" when Clapper 0.8 support is dropped */
+    const gchar *media_type = (_check_harvest_uri_demuxer ()) ? "text/x-uri" : "text/uri-list";
+    filled = clapper_harvest_fill_with_text (harvest, media_type, g_strdup (uri));
+  }
 
   return !filled;
 }
