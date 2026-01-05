@@ -21,8 +21,9 @@ gi.require_version('GObject', '2.0')
 gi.require_version('Gio', '2.0')
 gi.require_version('Gst', '1.0')
 gi.require_version('GstTag', '1.0')
+gi.require_version('Soup', '3.0')
 gi.require_version('Clapper', '0.0')
-from gi.repository import GLib, GObject, Gio, Gst, GstTag, Clapper
+from gi.repository import GLib, GObject, Gio, Gst, GstTag, Soup, Clapper
 
 import clapper_yt_dlp_debug as debug
 
@@ -40,18 +41,23 @@ def _find_best_thumbnail(thumbnails):
 
     return best
 
-def _fetch_image_sample(thumbnails, cancellable: Gio.Cancellable):
+def _fetch_image_sample(thumbnails, req_headers, cancellable: Gio.Cancellable):
     if not (best := _find_best_thumbnail(thumbnails)):
         debug.print_leveled(Gst.DebugLevel.INFO, 'No preview image found')
         return None
 
     debug.print_leveled(Gst.DebugLevel.DEBUG, 'Fetching image data...')
 
-    file = Gio.File.new_for_uri(best['url'])
+    session = Soup.Session()
+    msg = Soup.Message.new('GET', best['url'])
     gbytes = None
 
+    # Set message request headers
+    hdrs = msg.get_request_headers()
+    [hdrs.append(key, val) for key, val in req_headers.items()]
+
     try:
-        gbytes, _ = file.load_bytes(cancellable)
+        gbytes = session.send_and_read(msg, cancellable)
     except GLib.Error as e:
         # Just print, continue extraction without thumbnail
         debug.print_leveled(Gst.DebugLevel.ERROR, f'Thumbnail fetch failed: {e.message}')
@@ -87,8 +93,6 @@ def harvest_add_item_data(harvest: Clapper.Harvest, info, cancellable: Gio.Cance
         [harvest.tags_add(Gst.TAG_GENRE, val) for val in genres]
     elif (val := info.get('genre')):
         harvest.tags_add(Gst.TAG_GENRE, val)
-    if (th := info.get('thumbnails')) and (val := _fetch_image_sample(th, cancellable)):
-        harvest.tags_add(Gst.TAG_PREVIEW_IMAGE, val)
 
     # Add TOC
     if (val := info.get('chapters')):
@@ -110,6 +114,10 @@ def harvest_add_item_data(harvest: Clapper.Harvest, info, cancellable: Gio.Cance
         debug.print_leveled(Gst.DebugLevel.DEBUG, f'Merged HTTP headers: {json_str}')
 
     [harvest.headers_set(key, val) for key, val in req_headers.items()]
+
+    # Try to fetch preview image now that we have request headers
+    if (th := info.get('thumbnails')) and (val := _fetch_image_sample(th, req_headers, cancellable)):
+        harvest.tags_add(Gst.TAG_PREVIEW_IMAGE, val)
 
 def playlist_item_add_tags(item: Clapper.MediaItem, entry):
     tags = Gst.TagList.new_empty()
