@@ -1,0 +1,7 @@
+[Plugin]
+Module=clapper-dir-walker
+Name=Dir Walker
+Description=Traverses directories to add media within to the queue
+Version=@VERSION@
+X-Schemes=file
+X-Use-Cache=false

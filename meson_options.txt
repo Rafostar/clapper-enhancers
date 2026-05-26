@@ -16,6 +16,11 @@ option('control-hub',
   value: 'auto',
   description: 'Clapper Enhancer Control Hub'
 )
+option('dir-walker',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer Dir Walker'
+)
 option('lbry',
   type: 'feature',
   value: 'auto',
