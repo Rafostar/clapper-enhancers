@@ -8,6 +8,7 @@ clapper_possible_enhancers = [
   'parser-m3u',
   'peertube',
   'recall',
+  'subber',
   'yt-dlp',
 ]
 

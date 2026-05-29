@@ -1,0 +1,5 @@
+[Plugin]
+Module=clapper-subber
+Name=Subber
+Description=Downloads subtitles for played video
+Version=@VERSION@

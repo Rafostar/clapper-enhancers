@@ -51,6 +51,11 @@ option('recall',
   value: 'auto',
   description: 'Clapper Enhancer Recall'
 )
+option('subber',
+  type: 'feature',
+  value: 'auto',
+  description: 'Clapper Enhancer Subber'
+)
 option('yt-dlp',
   type: 'feature',
   value: 'auto',
