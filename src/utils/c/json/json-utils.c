@@ -103,12 +103,12 @@ json_utils_read_stream (GInputStream *stream, GCancellable *cancellable, GError 
 }
 
 JsonReader *
-json_utils_read_data (const gchar *data, GError **error)
+json_utils_read_data (const gchar *data, gssize len, GError **error)
 {
   JsonParser *parser = json_parser_new ();
   JsonReader *reader = NULL;
 
-  if (json_parser_load_from_data (parser, data, -1, error))
+  if (json_parser_load_from_data (parser, data, len, error))
     reader = _make_reader_from_parser (parser);
   else
     _ensure_parser_load_error (error);
@@ -152,7 +152,8 @@ json_utils_get_int (JsonReader *reader, ...)
   success = _json_reader_va_iter (reader, args, &depth);
   va_end (args);
 
-  if (success && json_reader_is_value (reader))
+  if (success && json_reader_is_value (reader)
+      && !json_reader_get_null_value (reader))
     value = json_reader_get_int_value (reader);
 
   json_utils_go_back (reader, depth);
@@ -172,7 +173,8 @@ json_utils_get_boolean (JsonReader *reader, ...)
   success = _json_reader_va_iter (reader, args, &depth);
   va_end (args);
 
-  if (success && json_reader_is_value (reader))
+  if (success && json_reader_is_value (reader)
+      && !json_reader_get_null_value (reader))
     value = json_reader_get_boolean_value (reader);
 
   json_utils_go_back (reader, depth);
