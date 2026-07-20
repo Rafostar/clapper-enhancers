@@ -19,11 +19,22 @@
 #pragma once
 
 #include <glib.h>
+#include <glib-object.h>
+
+#if GLIB_CHECK_VERSION(2, 80, 0)
+#define _once_init_type GType
+#define _once_init_enter g_once_init_enter_pointer
+#define _once_init_leave g_once_init_leave_pointer
+#else
+#define _once_init_type gsize
+#define _once_init_enter g_once_init_enter
+#define _once_init_leave g_once_init_leave
+#endif
 
 #define COMMON_UTILS_DEFINE_ENUM_TYPE(TypeName, type_name, ...)  \
-    GType type_name_##_get_type (void) {                         \
-      static gsize gtype_id = 0;                                 \
-      if (g_once_init_enter (&gtype_id)) {                       \
+    GType type_name##_get_type (void) {                          \
+      static _once_init_type gtype_id = 0;                       \
+      if (_once_init_enter (&gtype_id)) {                        \
         GType new_type = g_type_from_name (#TypeName);           \
         if (new_type == 0) {                                     \
           static const GEnumValue values[] = {                   \
@@ -33,14 +44,14 @@
           new_type = g_enum_register_static (                    \
               g_intern_static_string (#TypeName), values);       \
         }                                                        \
-        g_once_init_leave (&gtype_id, new_type);                 \
+        _once_init_leave (&gtype_id, new_type);                  \
     }                                                            \
-    return (GType) gtype_id; }
+    return gtype_id; }
 
 #define COMMON_UTILS_DEFINE_FLAGS_TYPE(TypeName, type_name, ...) \
-    GType type_name_##_get_type (void) {                         \
-      static gsize gtype_id = 0;                                 \
-      if (g_once_init_enter (&gtype_id)) {                       \
+    GType type_name##_get_type (void) {                          \
+      static _once_init_type gtype_id = 0;                       \
+      if (_once_init_enter (&gtype_id)) {                        \
         GType new_type = g_type_from_name (#TypeName);           \
         if (new_type == 0) {                                     \
           static const GFlagsValue values[] = {                  \
@@ -50,9 +61,9 @@
           new_type = g_flags_register_static (                   \
               g_intern_static_string (#TypeName), values);       \
         }                                                        \
-        g_once_init_leave (&gtype_id, new_type);                 \
+        _once_init_leave (&gtype_id, new_type);                  \
     }                                                            \
-    return (GType) gtype_id; }
+    return gtype_id; }
 
 G_BEGIN_DECLS
 

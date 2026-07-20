@@ -53,11 +53,24 @@ _type_to_variant_format (GType type)
 }
 
 static gboolean
+_is_type_done (GArray *done_types, GType type)
+{
+  guint i;
+
+  for (i = 0; i < done_types->len; ++i) {
+    if (g_array_index (done_types, GType, i) == type)
+      return TRUE;
+  }
+  return FALSE;
+}
+
+static gboolean
 compile_schema (ClapperEnhancerProxy *proxy, GError **error)
 {
   GFile *file;
   GFileOutputStream *ostream;
   GParamSpec **pspecs;
+  GArray *done_types;
   guint i, n_pspecs;
   gchar name_str[64];
   gboolean has_props = FALSE;
@@ -100,13 +113,14 @@ compile_schema (ClapperEnhancerProxy *proxy, GError **error)
   SCHEMA_WRITE ("<schemalist>");
 
   /* Write enums and flags */
+  done_types = g_array_new (FALSE, FALSE, sizeof (GType));
   for (i = 0; i < n_pspecs; ++i) {
     GParamSpec *pspec = pspecs[i];
 
     if (!(pspec->flags & CLAPPER_ENHANCER_PARAM_GLOBAL))
       continue;
 
-    if (G_IS_PARAM_SPEC_ENUM (pspec)) {
+    if (G_IS_PARAM_SPEC_ENUM (pspec) && !_is_type_done (done_types, pspec->value_type)) {
       GEnumClass *enum_class = G_ENUM_CLASS (g_type_class_peek (pspec->value_type));
       guint j;
 
@@ -119,7 +133,8 @@ compile_schema (ClapperEnhancerProxy *proxy, GError **error)
       }
 
       SCHEMA_WRITE (INDENT1 "</enum>");
-    } else if (G_IS_PARAM_SPEC_FLAGS (pspec)) {
+      g_array_append_val (done_types, pspec->value_type);
+    } else if (G_IS_PARAM_SPEC_FLAGS (pspec) && !_is_type_done (done_types, pspec->value_type)) {
       GFlagsClass *flags_class = G_FLAGS_CLASS (g_type_class_peek (pspec->value_type));
       guint j;
 
@@ -132,8 +147,10 @@ compile_schema (ClapperEnhancerProxy *proxy, GError **error)
       }
 
       SCHEMA_WRITE (INDENT1 "</flags>");
+      g_array_append_val (done_types, pspec->value_type);
     }
   }
+  g_array_free (done_types, TRUE);
 
   SCHEMA_WRITE (INDENT1 "<schema id=\"" SCHEMA_BASE_ID ".%s\" path=\"" SCHEMA_BASE_PATH "%s/\">",
       module_name, module_name);
