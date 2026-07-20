@@ -152,7 +152,8 @@ json_utils_get_int (JsonReader *reader, ...)
   success = _json_reader_va_iter (reader, args, &depth);
   va_end (args);
 
-  if (success && json_reader_is_value (reader))
+  if (success && json_reader_is_value (reader)
+      && !json_reader_get_null_value (reader))
     value = json_reader_get_int_value (reader);
 
   json_utils_go_back (reader, depth);
@@ -172,7 +173,8 @@ json_utils_get_boolean (JsonReader *reader, ...)
   success = _json_reader_va_iter (reader, args, &depth);
   va_end (args);
 
-  if (success && json_reader_is_value (reader))
+  if (success && json_reader_is_value (reader)
+      && !json_reader_get_null_value (reader))
     value = json_reader_get_boolean_value (reader);
 
   json_utils_go_back (reader, depth);
