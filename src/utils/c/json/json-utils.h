@@ -110,7 +110,7 @@ typedef gboolean (*JsonUtilsForeachFunc) (JsonReader *reader, ClapperHarvest *ha
 
 JsonReader * json_utils_read_stream (GInputStream *stream, GCancellable *cancellable, GError **error);
 
-JsonReader * json_utils_read_data (const gchar *data, GError **error);
+JsonReader * json_utils_read_data (const gchar *data, gssize len, GError **error);
 
 const gchar * json_utils_get_string (JsonReader *reader, ...) G_GNUC_NULL_TERMINATED;
 

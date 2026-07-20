@@ -103,12 +103,12 @@ json_utils_read_stream (GInputStream *stream, GCancellable *cancellable, GError 
 }
 
 JsonReader *
-json_utils_read_data (const gchar *data, GError **error)
+json_utils_read_data (const gchar *data, gssize len, GError **error)
 {
   JsonParser *parser = json_parser_new ();
   JsonReader *reader = NULL;
 
-  if (json_parser_load_from_data (parser, data, -1, error))
+  if (json_parser_load_from_data (parser, data, len, error))
     reader = _make_reader_from_parser (parser);
   else
     _ensure_parser_load_error (error);
